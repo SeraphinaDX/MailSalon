@@ -1,0 +1,48 @@
+# MailSalon configuration
+# Default location: ~/.config/mailsalon/config.toml
+#
+# Each [[accounts]] block is independent. MailSalon reads that account's
+# Maildir and uses that account's receive/send commands and signature.
+
+[[accounts]]
+name = "cerberus"
+maildir = "~/Maildir"
+from = "Britney Lozza <britney@cerberusgames.ca>"
+signature_file = "~/.signature"
+trash_folder = "Trash"
+download_dir = "~/Downloads"
+receive = "MailSalonSync -plain sync"
+send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
+
+# Example second account:
+# [[accounts]]
+# name = "work"
+# maildir = "~/Maildir-work"
+# from = "Your Name <you@work.example>"
+# signature_file = "~/.signature-work"
+# trash_folder = "Trash"
+# download_dir = "~/Downloads"
+# receive = "mbsync work"
+# send = "msmtp -a work -t"
+
+[options]
+default_account = "cerberus"
+startup_sync = false
+
+# Optional UI theme. Colors may be #RRGGBB truecolor values or supported
+# color names. Omitted theme values fall back to MailSalon's defaults.
+[theme]
+background = "#090d16"
+foreground = "#d8dee9"
+muted = "#77839a"
+border = "#36506b"
+active_border = "#64d8cb"
+title = "#ff9ecb"
+selected_fg = "#071018"
+selected_bg = "#ff9ecb"
+account = "#d9a7ff"
+unread = "#f6c177"
+status = "#64d8cb"
+error = "#ff6b81"
+cursor_fg = "#071018"
+cursor_bg = "#ff9ecb"
