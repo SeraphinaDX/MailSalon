@@ -54,6 +54,7 @@ type composeState struct {
 	references         string
 	account            int
 	isReply            bool
+	isForward          bool
 
 	attachPrompt *widgets.Input
 }
@@ -94,6 +95,7 @@ type App struct {
 	deleteArmed     bool
 
 	accountBar *widgets.Paragraph
+	updateBar  *widgets.Paragraph
 	folderList *widgets.List
 	messageTbl *widgets.Table
 	preview    *widgets.Paragraph
@@ -130,6 +132,13 @@ func New(cfg config.Config) (*App, error) {
 	a.accountBar.Title = "Account"
 	a.accountBar.WrapText = false
 	a.accountBar.BorderRounded = true
+
+	a.updateBar = widgets.NewParagraph()
+	a.updateBar.Title = "Update Mail"
+	a.updateBar.WrapText = false
+	a.updateBar.BorderRounded = true
+	a.updateBar.Text = "↻ Update"
+	a.updateBar.TitleBottom = "u/Click update"
 
 	a.folderList = widgets.NewList()
 	a.folderList.Title = "Folders"
@@ -205,6 +214,7 @@ func (a *App) applyStyles() {
 
 	for _, block := range []*ui.Block{
 		&a.accountBar.Block,
+		&a.updateBar.Block,
 		&a.folderList.Block,
 		&a.messageTbl.Block,
 		&a.preview.Block,
@@ -218,6 +228,8 @@ func (a *App) applyStyles() {
 
 	a.accountBar.BorderStyle = ui.NewStyle(a.theme.title, a.theme.background)
 	a.accountBar.TextStyle = ui.NewStyle(a.theme.account, a.theme.background)
+	a.updateBar.BorderStyle = ui.NewStyle(a.theme.status, a.theme.background)
+	a.updateBar.TextStyle = ui.NewStyle(a.theme.status, a.theme.background)
 
 	a.folderList.TextStyle = text
 	a.folderList.SelectedStyle = selected
@@ -360,7 +372,7 @@ func (a *App) handleKey(id string) bool {
 		}
 	case "a":
 		a.saveAttachments()
-	case "s":
+	case "s", "u":
 		a.runSync()
 	case "R":
 		if err := a.refreshFolders(); err != nil {
@@ -453,6 +465,8 @@ func (a *App) handleMouse(e ui.Event) {
 		switch {
 		case p.In(a.accountBar.Rectangle):
 			a.switchAccount(1)
+		case p.In(a.updateBar.Rectangle):
+			a.runSync()
 		case p.In(a.folderList.Inner):
 			a.focus = focusFolders
 			row := p.Y - a.folderList.Inner.Min.Y
@@ -494,6 +508,9 @@ func (a *App) mouseWheel(p image.Point, delta int) {
 		} else {
 			a.switchAccount(1)
 		}
+	case p.In(a.updateBar.Rectangle):
+		// The update control is a button, not a scroll target.
+		return
 	case p.In(a.folderList.Inner):
 		a.focus = focusFolders
 		if len(a.folders) > 0 {
@@ -597,6 +614,7 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 		attachPrompt: widgets.NewInput(),
 		account:      accountIndex,
 		isReply:      source != nil && !forward,
+		isForward:    source != nil && forward,
 	}
 	if c.isReply {
 		c.from.Title = "Reply from"
@@ -629,7 +647,7 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 	c.subject.Cursor = utf8.RuneCountInString(c.subject.Text)
 	a.compose = c
 	a.updateComposeFrom()
-	a.status = "Compose mode"
+	a.status = composeModeName(c) + " ready"
 }
 
 func (a *App) handleComposeEvent(e ui.Event) bool {
@@ -904,13 +922,16 @@ func (a *App) render() {
 	}
 
 	accountH := 3
+	updateH := 3
 	a.accountBar.SetRect(0, 0, folderW, accountH)
-	a.folderList.SetRect(0, accountH, folderW, footerY)
+	a.updateBar.SetRect(0, accountH, folderW, accountH+updateH)
+	a.folderList.SetRect(0, accountH+updateH, folderW, footerY)
 	a.messageTbl.SetRect(rightX, 0, w, listH)
 	a.preview.SetRect(rightX, listH, w, footerY)
 	a.footer.SetRect(0, footerY, w, h)
 
 	a.populateAccountBar()
+	a.populateUpdateBar()
 	a.folderList.Title = "Folders"
 	a.populateFolderList()
 	a.populateMessageTable()
@@ -918,7 +939,7 @@ func (a *App) render() {
 	a.footer.Text = a.footerText()
 
 	a.updateFocusStyles()
-	ui.Render(a.accountBar, a.folderList, a.messageTbl, a.preview, a.footer)
+	ui.Render(a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer)
 }
 
 func (a *App) populateAccountBar() {
@@ -932,6 +953,18 @@ func (a *App) populateAccountBar() {
 		a.accountBar.Text = safeUI(account.Name)
 		a.accountBar.TitleBottom = "only account"
 	}
+}
+
+func (a *App) populateUpdateBar() {
+	account := a.currentAccount()
+	a.updateBar.Title = "Update Mail"
+	a.updateBar.Text = "↻ Update"
+	if strings.TrimSpace(account.ReceiveCommand) == "" {
+		a.updateBar.Text = "Update unavailable"
+		a.updateBar.TitleBottom = "no receive command"
+		return
+	}
+	a.updateBar.TitleBottom = "u/Click update"
 }
 
 func (a *App) populateFolderList() {
@@ -1042,14 +1075,14 @@ func (a *App) updateFocusStyles() {
 func (a *App) footerText() string {
 	account := a.currentAccount()
 	line1 := fmt.Sprintf(" [%s] %s", account.Name, a.status)
-	line2 := " c Compose  r Reply  f Fwd  d Delete  a Save  s Sync  A Switch account"
-	line3 := " Tab Focus  j/k Move  Enter Open  PgUp/PgDn Page  R Refresh  q Quit"
+	line2 := " c Compose  u Update mail  r Reply  f Forward  d Delete  a Save attachments"
+	line3 := " A Switch account  Tab Focus  j/k Move  Enter Open  PgUp/PgDn Page  R Refresh  q Quit"
 	return safeUI(line1 + "\n" + line2 + "\n" + line3)
 }
 
 func (a *App) renderCompose(w, h int) {
 	c := a.compose
-	footerY := h - 3
+	footerY := h - 4
 	inputH := 3
 	y := 0
 	c.from.SetRect(0, y, w, y+inputH)
@@ -1091,11 +1124,19 @@ func (a *App) renderCompose(w, h int) {
 	}
 
 	a.footer.SetRect(0, footerY, w, h)
-	fromHint := "From row shows the sending identity"
-	if len(a.cfg.Accounts) > 1 {
-		fromHint = "From row: ←/→ change sending account"
+	fromLabel := "From"
+	fromHint := "From: selected account identity"
+	if c.isReply {
+		fromLabel = "Reply from"
 	}
-	a.footer.Text = safeUI(" " + a.status + "\n Ctrl+S Send  Ctrl+A Attach  Tab/Shift+Tab Fields  Esc Cancel\n" + fromHint)
+	if len(a.cfg.Accounts) > 1 {
+		fromHint = fromLabel + ": ←/→ switch account"
+	}
+	legend := fmt.Sprintf(
+		" [%s] %s\n Ctrl+S Send  Ctrl+A Attach  Esc Cancel  Tab/Shift+Tab Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline\n %s  Backspace/Delete Edit",
+		composeModeName(c), a.status, fromHint,
+	)
+	a.footer.Text = safeUI(legend)
 	a.updateFooterStyle()
 
 	a.highlightComposeField()
@@ -1108,6 +1149,19 @@ func (a *App) renderCompose(w, h int) {
 		items = append(items, c.attachPrompt)
 	}
 	ui.Render(items...)
+}
+
+func composeModeName(c *composeState) string {
+	if c == nil {
+		return "Compose"
+	}
+	if c.isReply {
+		return "Reply"
+	}
+	if c.isForward {
+		return "Forward"
+	}
+	return "Compose"
 }
 
 func (a *App) highlightComposeField() {

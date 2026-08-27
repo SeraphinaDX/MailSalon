@@ -52,10 +52,22 @@ type Draft struct {
 }
 
 var (
-	wordDecoder = &mime.WordDecoder{}
-	tagRE       = regexp.MustCompile(`(?s)<[^>]*>`)
-	spaceRE     = regexp.MustCompile(`[ \t]+`)
-	blankRE     = regexp.MustCompile(`\n{3,}`)
+	wordDecoder  = &mime.WordDecoder{}
+	tagRE        = regexp.MustCompile(`(?s)<[^>]*>`)
+	commentRE    = regexp.MustCompile(`(?is)<!--.*?-->`)
+	headRE       = regexp.MustCompile(`(?is)<head\b[^>]*>.*?</head\s*>`)
+	scriptRE     = regexp.MustCompile(`(?is)<script\b[^>]*>.*?</script\s*>`)
+	styleRE      = regexp.MustCompile(`(?is)<style\b[^>]*>.*?</style\s*>`)
+	brRE         = regexp.MustCompile(`(?is)<br\s*/?\s*>`)
+	hrRE         = regexp.MustCompile(`(?is)<hr\b[^>]*>`)
+	liOpenRE     = regexp.MustCompile(`(?is)<li\b[^>]*>`)
+	liCloseRE    = regexp.MustCompile(`(?is)</li\s*>`)
+	blockCloseRE = regexp.MustCompile(`(?is)</(?:p|div|section|article|header|footer|h[1-6]|blockquote|pre)\s*>`)
+	rowCloseRE   = regexp.MustCompile(`(?is)</tr\s*>`)
+	cellCloseRE  = regexp.MustCompile(`(?is)</t[dh]\s*>`)
+	anchorRE     = regexp.MustCompile(`(?is)<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a\s*>`)
+	spaceRE      = regexp.MustCompile(`[ \t]+`)
+	blankRE      = regexp.MustCompile(`\n{3,}`)
 )
 
 func ParseFile(path string) (*ParsedMessage, error) {
@@ -89,6 +101,17 @@ func ParseFile(path string) (*ParsedMessage, error) {
 	return p, nil
 }
 
+func NormalizeAddressList(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	if _, err := mail.ParseAddressList(raw); err != nil {
+		return "", fmt.Errorf("invalid address list: %w", err)
+	}
+	return raw, nil
+}
+
 func Build(d Draft) ([]byte, error) {
 	if strings.TrimSpace(d.From) == "" {
 		return nil, fmt.Errorf("from address is empty")
@@ -102,17 +125,30 @@ func Build(d Draft) ([]byte, error) {
 		}
 	}
 
+	to, err := NormalizeAddressList(d.To)
+	if err != nil {
+		return nil, fmt.Errorf("To: %w", err)
+	}
+	cc, err := NormalizeAddressList(d.Cc)
+	if err != nil {
+		return nil, fmt.Errorf("Cc: %w", err)
+	}
+	bcc, err := NormalizeAddressList(d.Bcc)
+	if err != nil {
+		return nil, fmt.Errorf("Bcc: %w", err)
+	}
+
 	var buf bytes.Buffer
 	w := bufio.NewWriter(&buf)
 	writeHeader(w, "From", d.From)
-	writeHeader(w, "To", d.To)
-	if strings.TrimSpace(d.Cc) != "" {
-		writeHeader(w, "Cc", d.Cc)
+	writeHeader(w, "To", to)
+	if strings.TrimSpace(cc) != "" {
+		writeHeader(w, "Cc", cc)
 	}
 	// Senders such as `msmtp -t` need Bcc in the input to discover envelope
 	// recipients. Such senders are expected to strip it before transmission.
-	if strings.TrimSpace(d.Bcc) != "" {
-		writeHeader(w, "Bcc", d.Bcc)
+	if strings.TrimSpace(bcc) != "" {
+		writeHeader(w, "Bcc", bcc)
 	}
 	writeHeader(w, "Subject", encodeHeader(d.Subject))
 	writeHeader(w, "Date", time.Now().Format(time.RFC1123Z))
@@ -302,13 +338,55 @@ func decodeTransfer(enc string, r io.Reader) io.Reader {
 }
 
 func stripHTML(s string) string {
-	s = strings.ReplaceAll(s, "<br>", "\n")
-	s = strings.ReplaceAll(s, "<br/>", "\n")
-	s = strings.ReplaceAll(s, "<br />", "\n")
-	s = strings.ReplaceAll(s, "</p>", "\n\n")
+	// MailSalon is a terminal client, so HTML-only messages are reduced to a
+	// readable text representation rather than exposing raw markup. This is
+	// intentionally conservative: scripts/styles are discarded, structural
+	// elements become whitespace, and useful link destinations are retained.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	s = commentRE.ReplaceAllString(s, "")
+	s = headRE.ReplaceAllString(s, "")
+	s = scriptRE.ReplaceAllString(s, "")
+	s = styleRE.ReplaceAllString(s, "")
+	s = anchorRE.ReplaceAllStringFunc(s, func(match string) string {
+		m := anchorRE.FindStringSubmatch(match)
+		if len(m) != 5 {
+			return match
+		}
+		href := m[1]
+		if href == "" {
+			href = m[2]
+		}
+		if href == "" {
+			href = m[3]
+		}
+		label := strings.TrimSpace(html.UnescapeString(tagRE.ReplaceAllString(m[4], "")))
+		href = strings.TrimSpace(html.UnescapeString(href))
+		if href == "" || href == label {
+			return label
+		}
+		if label == "" {
+			return href
+		}
+		return label + " (" + href + ")"
+	})
+	s = brRE.ReplaceAllString(s, "\n")
+	s = hrRE.ReplaceAllString(s, "\n---\n")
+	s = liOpenRE.ReplaceAllString(s, "\n* ")
+	s = liCloseRE.ReplaceAllString(s, "\n")
+	s = cellCloseRE.ReplaceAllString(s, "\t")
+	s = rowCloseRE.ReplaceAllString(s, "\n")
+	s = blockCloseRE.ReplaceAllString(s, "\n\n")
 	s = tagRE.ReplaceAllString(s, "")
 	s = html.UnescapeString(s)
+	s = strings.ReplaceAll(s, "\u00a0", " ")
 	s = spaceRE.ReplaceAllString(s, " ")
+
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimSpace(lines[i])
+	}
+	s = strings.Join(lines, "\n")
 	s = blankRE.ReplaceAllString(s, "\n\n")
 	return strings.TrimSpace(s)
 }

@@ -49,3 +49,16 @@ func TestParseThemeColor(t *testing.T) {
 		t.Fatal("invalid color was accepted")
 	}
 }
+
+func TestMainLegendShowsComposeAndUpdate(t *testing.T) {
+	a := &App{
+		cfg:    config.Config{Accounts: []config.Account{{Name: "test"}}},
+		status: "Ready",
+	}
+	legend := a.footerText()
+	for _, want := range []string{"c Compose", "u Update mail"} {
+		if !strings.Contains(legend, want) {
+			t.Fatalf("main legend missing %q: %q", want, legend)
+		}
+	}
+}

@@ -20,18 +20,19 @@ account selector, or use the mouse wheel over it to switch accounts.
 ┌─ Account 1/2 ────────┐┌─ Messages ──────────────────────────────────────────┐
 │ ‹ cerberus ›         ││ ●  From             Subject                  Date  │
 ├─ A/Click switch ─────┤│    Alice Example    Plans for Friday        14:32 │
-┌─ Folders ────────────┐│ ●  Bob Example      Re: project             13:08 │
-│ INBOX                │├─ Message ───────────────────────────────────────────┤
-│ Archive              ││ From: Alice Example <alice@example.com>            │
-│ Drafts               ││ To: britney@cerberusgames.ca                       │
-│ Sent                 ││ Subject: Plans for Friday                          │
-│ Trash                ││                                                    │
-│                      ││ Message body...                                    │
-│                      │├─ Wheel/j/k Scroll  r Reply  f Fwd  a Save  d Delete ┤
+┌─ Update Mail ────────┐│ ●  Bob Example      Re: project             13:08 │
+│ ↻ Update             │├─ Message ───────────────────────────────────────────┤
+├─ u/Click update ─────┤│ From: Alice Example <alice@example.com>            │
+┌─ Folders ────────────┐│ To: britney@cerberusgames.ca                       │
+│ INBOX                ││ Subject: Plans for Friday                          │
+│ Archive              ││                                                    │
+│ Drafts               ││ Message body...                                    │
+│ Sent                 ││                                                    │
+│ Trash                │├─ Wheel/j/k Scroll  r Reply  f Fwd  a Save  d Delete ┤
 └──────────────────────┘└────────────────────────────────────────────────────┘
  [cerberus] Ready
- c Compose  r Reply  f Fwd  d Delete  a Save  s Sync  A Switch account
- Tab Focus  j/k Move  Enter Open  PgUp/PgDn Page  R Refresh  q Quit
+ c Compose  u Update mail  r Reply  f Forward  d Delete  a Save attachments
+ A Switch account  Tab Focus  j/k Move  Enter Open  PgUp/PgDn Page  R Refresh  q Quit
 ```
 
 ## Features
@@ -42,9 +43,9 @@ account selector, or use the mouse wheel over it to switch accounts.
 - INBOX, Maildir++ folders such as `.Sent`, and nested Maildirs.
 - Left-side folder navigation.
 - Wide From / Subject / Date message table.
-- Plain-text message preview with a basic HTML-to-text fallback.
+- Plain-text message preview. HTML-only messages are converted to readable terminal text, preserving paragraphs, lists, and useful link destinations while discarding scripts/styles.
 - Contextual keybind hints are displayed directly on the message-preview pane.
-- New message composition.
+- New message composition with separate To, Cc, and Bcc fields. Each field accepts multiple comma-separated RFC-style addresses.
 - Reply with `In-Reply-To`, `References`, and quoted original text.
 - Selectable **Reply from** account in the compose UI.
 - Automatic reply-account selection when a message's To/Cc address matches a
@@ -60,9 +61,9 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Generic external send command per account. MailSalon writes the complete RFC
   5322/MIME message to the command's standard input.
 - Mouse selection and mouse-wheel scrolling.
-- Persistent on-screen key hints.
+- Persistent on-screen key hints, including a mode-aware legend while composing, replying, or forwarding.
 - TOML-configurable truecolor UI themes, including pane backgrounds, borders, active focus, titles, selections, unread mail, account identity, status/error text, and compose cursors.
-- Always-visible account selector above the folder list with keyboard and mouse hints.
+- Always-visible account selector and Update Mail control above the folder list with keyboard and mouse hints.
 - Keyboard-only operation remains fully supported.
 
 ## Requirements
@@ -290,15 +291,22 @@ different account's transport configuration.
 | `f` | Forward |
 | `d`, then `d` | Delete / confirm delete |
 | `a` | Save all attachments from the selected message |
-| `s` | Run the active account's receive command and rescan |
+| `u` | Update mail: run the active account's receive command and rescan |
+| `s` | Alias for Update mail |
 | `R` | Rescan the active Maildir without running a receive command |
 | `q` / `Ctrl+C` | Quit |
 
-### Compose / reply view
+### Compose / reply / forward view
 
 The first row is `From` for new messages and forwards, or `Reply from` for
 replies. It displays the account name, email identity, and configured signature
-file.
+file. A four-line legend remains visible at the bottom of the screen and labels
+the current mode as `Compose`, `Reply`, or `Forward`.
+
+`To`, `Cc`, and `Bcc` each accept multiple comma-separated addresses, including
+display-name forms such as `Alice <alice@example.com>, Bob <bob@example.com>`.
+MailSalon validates each address list before invoking the external send command
+and identifies the bad field if parsing fails.
 
 | Key | Action |
 | --- | --- |
@@ -315,6 +323,7 @@ file.
 
 - Click a folder to open it.
 - Click the dedicated Account selector above Folders to switch to the next account.
+- Click the **Update Mail** control to run the active account's receive command and rescan the Maildir.
 - Use the mouse wheel over the Account selector to switch backward/forward.
 - Click a message to select and preview it.
 - Click the preview pane to focus it.
@@ -325,8 +334,7 @@ file.
 
 ## Maildir behavior
 
-Each account treats its configured Maildir root as INBOX. MailSalon discovers
-both Maildir++ folder names such as `.Trash` and ordinary nested Maildirs.
+Each account can point either at an INBOX Maildir itself or at a Maildir container that contains an `INBOX` child. MailSalon discovers Maildir++ folders such as `.Trash` and ordinary nested Maildirs without manufacturing a duplicate INBOX.
 Messages in `new` or without the `S` flag are displayed as unread. Opening a
 message moves it from `new` to `cur` and adds the `S` (seen) flag.
 
