@@ -1,4 +1,4 @@
-# MailSalon
+# MailSalon 0.1.0
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
@@ -28,7 +28,7 @@ account selector, or use the mouse wheel over it to switch accounts.
 │ Archive              ││                                                    │
 │ Drafts               ││ Message body...                                    │
 │ Sent                 ││                                                    │
-│ Trash                │├─ j/k Scroll  r Reply  f Fwd  m Read/Unread  a Save ┤
+│ Trash                │├─ j/k Scroll  r Reply  f Fwd  m Read/Unread / Search ┤
 └──────────────────────┘└────────────────────────────────────────────────────┘
  [cerberus] Ready
  c Compose  u Update mail  r Reply  f Forward  m Read/unread  / Search
@@ -78,6 +78,22 @@ account selector, or use the mouse wheel over it to switch accounts.
   MailSalonSync.
 - An external sender such as `msmtp`, MailSalonSync JMAP submission, or your
   own compatible command.
+
+## Version
+
+MailSalon 0.1.0 is the first named development release. Check the installed
+version with either:
+
+```sh
+MailSalon -version
+MailSalon --version
+```
+
+Both print:
+
+```text
+MailSalon 0.1.0
+```
 
 ## Build
 

@@ -9,12 +9,19 @@ import (
 
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/config"
 	uiapp "git.cerberusgames.ca/Starstreak/MailSalon/internal/ui"
+	"git.cerberusgames.ca/Starstreak/MailSalon/internal/version"
 )
 
 func main() {
 	configPath := flag.String("config", config.DefaultPath(), "path to MailSalon configuration")
 	noStartupSync := flag.Bool("no-startup-sync", false, "disable startup receive command for this run")
+	showVersion := flag.Bool("version", false, "show MailSalon version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("MailSalon %s\n", version.Version)
+		return
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

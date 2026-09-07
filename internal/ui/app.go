@@ -76,6 +76,8 @@ type resolvedTheme struct {
 	cursorBG     ui.Color
 }
 
+const messagePreviewLegend = "j/k Scroll  PgUp/PgDn Page  r Reply  f Fwd  m Read/Unread  / Search  a Save  d Delete"
+
 type App struct {
 	cfg     config.Config
 	theme   resolvedTheme
@@ -158,7 +160,7 @@ func New(cfg config.Config) (*App, error) {
 
 	a.preview = widgets.NewParagraph()
 	a.preview.Title = "Message"
-	a.preview.TitleBottom = "j/k Scroll  PgUp/PgDn Page  r Reply  f Fwd  m Read/Unread  a Save  d Delete"
+	a.preview.TitleBottom = messagePreviewLegend
 	a.preview.WrapText = false
 	a.preview.BorderRounded = true
 

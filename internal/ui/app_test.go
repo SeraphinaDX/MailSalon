@@ -67,6 +67,14 @@ func TestMainLegendShowsComposeAndUpdate(t *testing.T) {
 	}
 }
 
+func TestPreviewLegendShowsReadToggleAndSearch(t *testing.T) {
+	for _, want := range []string{"m Read/Unread", "/ Search"} {
+		if !strings.Contains(messagePreviewLegend, want) {
+			t.Fatalf("message preview legend missing %q: %q", want, messagePreviewLegend)
+		}
+	}
+}
+
 func TestComposeInitialFocus(t *testing.T) {
 	a := &App{
 		cfg: config.Config{Accounts: []config.Account{{Name: "test", From: "test@example.com"}}},
