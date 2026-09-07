@@ -76,7 +76,17 @@ func ParseFile(path string) (*ParsedMessage, error) {
 		return nil, err
 	}
 	defer f.Close()
-	m, err := mail.ReadMessage(f)
+	return parseMessage(f)
+}
+
+// ParseBytes parses a complete RFC 5322 message already held in memory. This is
+// used after OpenPGP processing has decrypted/verified a PGP/MIME wrapper.
+func ParseBytes(raw []byte) (*ParsedMessage, error) {
+	return parseMessage(bytes.NewReader(raw))
+}
+
+func parseMessage(r io.Reader) (*ParsedMessage, error) {
+	m, err := mail.ReadMessage(r)
 	if err != nil {
 		return nil, err
 	}

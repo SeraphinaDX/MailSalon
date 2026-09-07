@@ -2,7 +2,8 @@
 # Default location: ~/.config/mailsalon/config.toml
 #
 # Each [[accounts]] block is independent. MailSalon reads that account's
-# Maildir and uses that account's receive/send commands and signature.
+# Maildir and uses that account's receive/send commands, identity, signature,
+# and optional OpenPGP settings.
 
 [[accounts]]
 name = "cerberus"
@@ -14,6 +15,18 @@ download_dir = "~/Downloads"
 receive = "MailSalonSync -plain sync"
 send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
 
+# Optional OpenPGP/GnuPG support for this account. `command` is an executable
+# name or path, not an arbitrary shell command. Point it at a wrapper script if
+# you need custom GnuPG invocation behavior.
+[accounts.gpg]
+enabled = true
+command = "gpg"
+# homedir = "~/.gnupg"
+sign_key = "britney@cerberusgames.ca"
+auto_sign = false
+auto_encrypt = false
+encrypt_to_self = true
+
 # Example second account:
 # [[accounts]]
 # name = "work"
@@ -24,6 +37,14 @@ send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
 # download_dir = "~/Downloads"
 # receive = "mbsync work"
 # send = "msmtp -a work -t"
+#
+# [accounts.gpg]
+# enabled = true
+# command = "gpg"
+# sign_key = "you@work.example"
+# auto_sign = true
+# auto_encrypt = false
+# encrypt_to_self = true
 
 [options]
 default_account = "cerberus"

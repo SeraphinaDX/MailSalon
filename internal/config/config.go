@@ -12,6 +12,16 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+type GPG struct {
+	Enabled       bool
+	Command       string
+	HomeDir       string
+	SignKey       string
+	AutoSign      bool
+	AutoEncrypt   bool
+	EncryptToSelf bool
+}
+
 type Account struct {
 	Name           string
 	Maildir        string
@@ -21,6 +31,7 @@ type Account struct {
 	SendCommand    string
 	DownloadDir    string
 	TrashFolder    string
+	GPG            GPG
 }
 
 type Theme struct {
@@ -47,15 +58,26 @@ type Config struct {
 	Theme          Theme
 }
 
+type fileGPG struct {
+	Enabled       *bool  `toml:"enabled"`
+	Command       string `toml:"command"`
+	HomeDir       string `toml:"homedir"`
+	SignKey       string `toml:"sign_key"`
+	AutoSign      bool   `toml:"auto_sign"`
+	AutoEncrypt   bool   `toml:"auto_encrypt"`
+	EncryptToSelf *bool  `toml:"encrypt_to_self"`
+}
+
 type fileAccount struct {
-	Name          string `toml:"name"`
-	Maildir       string `toml:"maildir"`
-	From          string `toml:"from"`
-	SignatureFile string `toml:"signature_file"`
-	TrashFolder   string `toml:"trash_folder"`
-	DownloadDir   string `toml:"download_dir"`
-	Receive       string `toml:"receive"`
-	Send          string `toml:"send"`
+	Name          string  `toml:"name"`
+	Maildir       string  `toml:"maildir"`
+	From          string  `toml:"from"`
+	SignatureFile string  `toml:"signature_file"`
+	TrashFolder   string  `toml:"trash_folder"`
+	DownloadDir   string  `toml:"download_dir"`
+	Receive       string  `toml:"receive"`
+	Send          string  `toml:"send"`
+	GPG           fileGPG `toml:"gpg"`
 }
 
 type fileTheme struct {
@@ -93,6 +115,7 @@ type fileConfig struct {
 		Receive string `toml:"receive"`
 		Send    string `toml:"send"`
 	} `toml:"commands"`
+	GPG fileGPG `toml:"gpg"`
 
 	Options struct {
 		StartupSync    bool   `toml:"startup_sync"`
@@ -185,6 +208,7 @@ func Load(path string) (Config, error) {
 			DownloadDir:   raw.Mail.DownloadDir,
 			Receive:       raw.Commands.Receive,
 			Send:          raw.Commands.Send,
+			GPG:           raw.GPG,
 		}
 		cfg.Accounts = []Account{normalizeAccount(legacy, 0)}
 	}
@@ -234,6 +258,31 @@ func normalizeAccount(a fileAccount, index int) Account {
 		DownloadDir:    expandPath(downloadDir),
 		ReceiveCommand: strings.TrimSpace(a.Receive),
 		SendCommand:    strings.TrimSpace(a.Send),
+		GPG:            normalizeGPG(a.GPG),
+	}
+}
+
+func normalizeGPG(raw fileGPG) GPG {
+	enabled := false
+	if raw.Enabled != nil {
+		enabled = *raw.Enabled
+	}
+	encryptToSelf := true
+	if raw.EncryptToSelf != nil {
+		encryptToSelf = *raw.EncryptToSelf
+	}
+	command := strings.TrimSpace(raw.Command)
+	if command == "" {
+		command = "gpg"
+	}
+	return GPG{
+		Enabled:       enabled,
+		Command:       command,
+		HomeDir:       expandPath(raw.HomeDir),
+		SignKey:       strings.TrimSpace(raw.SignKey),
+		AutoSign:      raw.AutoSign,
+		AutoEncrypt:   raw.AutoEncrypt,
+		EncryptToSelf: encryptToSelf,
 	}
 }
 
@@ -276,6 +325,9 @@ func validateAccounts(accounts []Account) error {
 		seen[key] = true
 		if strings.TrimSpace(a.Maildir) == "" {
 			return fmt.Errorf("account %q has no maildir", a.Name)
+		}
+		if !a.GPG.Enabled && (a.GPG.AutoSign || a.GPG.AutoEncrypt) {
+			return fmt.Errorf("account %q enables automatic OpenPGP protection but gpg.enabled is false", a.Name)
 		}
 	}
 	return nil

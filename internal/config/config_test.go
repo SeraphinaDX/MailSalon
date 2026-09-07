@@ -112,6 +112,66 @@ made_up_setting = true
 	}
 }
 
+func TestLoadAccountGPGTOML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := `
+[[accounts]]
+name = "personal"
+maildir = "~/Maildir"
+from = "Alice Example <alice@example.com>"
+
+[accounts.gpg]
+enabled = true
+command = "gpg2"
+homedir = "~/.gnupg-mail"
+sign_key = "alice@example.com"
+auto_sign = true
+auto_encrypt = false
+encrypt_to_self = false
+`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := cfg.Accounts[0].GPG
+	if !g.Enabled || !g.AutoSign || g.AutoEncrypt || g.EncryptToSelf {
+		t.Fatalf("unexpected GPG booleans: %#v", g)
+	}
+	if g.Command != "gpg2" || g.SignKey != "alice@example.com" {
+		t.Fatalf("unexpected GPG settings: %#v", g)
+	}
+	if !strings.HasSuffix(g.HomeDir, filepath.Join(".gnupg-mail")) {
+		t.Fatalf("GPG homedir was not expanded: %q", g.HomeDir)
+	}
+}
+
+func TestLoadGPGDefaultsEncryptToSelf(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := `
+[[accounts]]
+name = "personal"
+maildir = "~/Maildir"
+
+[accounts.gpg]
+enabled = true
+`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Accounts[0].GPG.Command != "gpg" || !cfg.Accounts[0].GPG.EncryptToSelf {
+		t.Fatalf("unexpected GPG defaults: %#v", cfg.Accounts[0].GPG)
+	}
+}
+
 func TestLoadThemeTOML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

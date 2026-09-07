@@ -18,6 +18,7 @@ import (
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/config"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/maildir"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/mimeutil"
+	"git.cerberusgames.ca/Starstreak/MailSalon/internal/pgp"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/transport"
 )
 
@@ -55,6 +56,8 @@ type composeState struct {
 	account            int
 	isReply            bool
 	isForward          bool
+	pgpSign            bool
+	pgpEncrypt         bool
 
 	attachPrompt *widgets.Input
 }
@@ -87,6 +90,7 @@ type App struct {
 	allMessages []maildir.Entry
 	messages    []maildir.Entry
 	parsed      *mimeutil.ParsedMessage
+	security    pgp.Info
 
 	selectedFolder  int
 	selectedMessage int
@@ -273,6 +277,7 @@ func (a *App) refreshFolders() error {
 		a.allMessages = nil
 		a.messages = nil
 		a.parsed = nil
+		a.security = pgp.Info{}
 		a.searchQuery = ""
 		return nil
 	}
@@ -300,6 +305,7 @@ func (a *App) loadFolder(index int) error {
 	a.messageOffset = 0
 	a.previewScroll = 0
 	a.parsed = nil
+	a.security = pgp.Info{}
 	a.searchQuery = ""
 	if len(a.messages) > 0 {
 		_ = a.openMessage(0)
@@ -314,15 +320,24 @@ func (a *App) openMessage(index int) error {
 	}
 	a.selectedMessage = index
 	oldPath := a.messages[index].Path
-	p, err := mimeutil.ParseFile(a.messages[index].Path)
+	raw, err := os.ReadFile(a.messages[index].Path)
 	if err != nil {
 		return err
+	}
+	processed, security := pgp.ProcessIncoming(context.Background(), raw, pgpSettings(a.currentAccount()))
+	p, err := mimeutil.ParseBytes(processed)
+	if err != nil {
+		return err
+	}
+	if security.Encrypted && !security.Decrypted && strings.TrimSpace(security.Error) != "" {
+		p.Body = "This message is OpenPGP encrypted, but MailSalon could not decrypt it.\n\n" + security.Error
 	}
 	if err := maildir.MarkRead(&a.messages[index]); err != nil {
 		return err
 	}
 	a.syncMasterEntry(oldPath, a.messages[index])
 	a.parsed = p
+	a.security = security
 	a.previewScroll = 0
 	return nil
 }
@@ -454,7 +469,7 @@ func (a *App) applySearch(query string) {
 	} else {
 		matches := make([]maildir.Entry, 0)
 		for _, entry := range a.allMessages {
-			if messageMatchesSearch(entry, a.searchQuery) {
+			if a.messageMatchesSearch(entry, a.searchQuery) {
 				matches = append(matches, entry)
 			}
 		}
@@ -469,6 +484,14 @@ func (a *App) applySearch(query string) {
 }
 
 func messageMatchesSearch(entry maildir.Entry, query string) bool {
+	return messageMatchesSearchWithPGP(entry, query, pgp.Settings{})
+}
+
+func (a *App) messageMatchesSearch(entry maildir.Entry, query string) bool {
+	return messageMatchesSearchWithPGP(entry, query, pgpSettings(a.currentAccount()))
+}
+
+func messageMatchesSearchWithPGP(entry maildir.Entry, query string, settings pgp.Settings) bool {
 	needle := strings.ToLower(strings.TrimSpace(query))
 	if needle == "" {
 		return true
@@ -482,7 +505,12 @@ func messageMatchesSearch(entry maildir.Entry, query string) bool {
 	if strings.Contains(quick, needle) {
 		return true
 	}
-	p, err := mimeutil.ParseFile(entry.Path)
+	raw, err := os.ReadFile(entry.Path)
+	if err != nil {
+		return false
+	}
+	processed, _ := pgp.ProcessIncoming(context.Background(), raw, settings)
+	p, err := mimeutil.ParseBytes(processed)
 	if err != nil {
 		return false
 	}
@@ -761,6 +789,10 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 		isReply:      source != nil && !forward,
 		isForward:    source != nil && forward,
 	}
+	if accountIndex >= 0 && accountIndex < len(a.cfg.Accounts) {
+		c.pgpSign = a.cfg.Accounts[accountIndex].GPG.Enabled && a.cfg.Accounts[accountIndex].GPG.AutoSign
+		c.pgpEncrypt = a.cfg.Accounts[accountIndex].GPG.Enabled && a.cfg.Accounts[accountIndex].GPG.AutoEncrypt
+	}
 	if c.isReply {
 		c.from.Title = "Reply from"
 	} else {
@@ -832,6 +864,9 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 		c.attachPrompt.Text = ""
 		c.attachPrompt.Cursor = 0
 		c.attachPrompt.TitleBottom = "active"
+		return false
+	case "<C-g>":
+		a.cycleComposePGPMode()
 		return false
 	case "<Tab>":
 		c.field = (c.field + 1) % 6
@@ -1031,6 +1066,19 @@ func (a *App) sendCompose() {
 		a.setError(err)
 		return
 	}
+	if c.pgpSign || c.pgpEncrypt {
+		a.status = fmt.Sprintf("Applying OpenPGP (%s)...", composePGPModeName(c, account))
+		a.render()
+		raw, err = pgp.ProtectOutgoing(context.Background(), raw, pgp.OutgoingOptions{
+			Settings: pgpSettings(account),
+			Sign:     c.pgpSign,
+			Encrypt:  c.pgpEncrypt,
+		})
+		if err != nil {
+			a.setError(err)
+			return
+		}
+	}
 	a.status = fmt.Sprintf("Sending from %s...", account.Name)
 	a.render()
 	out, err := transport.Send(context.Background(), account.SendCommand, raw)
@@ -1196,6 +1244,9 @@ func (a *App) populatePreview() {
 	}
 	fmt.Fprintf(&b, "Date: %s\n", a.parsed.Date)
 	fmt.Fprintf(&b, "Subject: %s\n", emptySubject(a.parsed.Subject))
+	if security := strings.TrimSpace(a.security.Summary()); security != "" {
+		fmt.Fprintf(&b, "%s\n", security)
+	}
 	if len(a.parsed.Attachments) > 0 {
 		names := make([]string, 0, len(a.parsed.Attachments))
 		for _, at := range a.parsed.Attachments {
@@ -1296,8 +1347,8 @@ func (a *App) renderCompose(w, h int) {
 		fromHint = fromLabel + ": ←/→ switch account"
 	}
 	legend := fmt.Sprintf(
-		" [%s] %s\n Ctrl+S Send  Ctrl+A Attach  Esc Cancel  Tab/Shift+Tab Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline\n %s  Backspace/Delete Edit",
-		composeModeName(c), a.status, fromHint,
+		" [%s] %s — OpenPGP: %s\n Ctrl+S Send  Ctrl+A Attach  Ctrl+G PGP mode  Esc Cancel  Tab/Shift+Tab Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline\n %s  Backspace/Delete Edit",
+		composeModeName(c), a.status, composePGPModeName(c, a.composeAccount()), fromHint,
 	)
 	a.footer.Text = safeUI(legend)
 	a.updateFooterStyle()
@@ -1554,8 +1605,73 @@ func (a *App) cycleComposeAccount(delta int) {
 		return
 	}
 	a.compose.account = wrapIndex(a.compose.account+delta, len(a.cfg.Accounts))
+	a.applyComposePGPDefaults()
 	a.updateComposeFrom()
-	a.status = "From: " + a.composeAccount().From
+	a.status = "From: " + a.composeAccount().From + " — OpenPGP: " + composePGPModeName(a.compose, a.composeAccount())
+}
+
+func (a *App) applyComposePGPDefaults() {
+	if a.compose == nil {
+		return
+	}
+	account := a.composeAccount()
+	a.compose.pgpSign = account.GPG.Enabled && account.GPG.AutoSign
+	a.compose.pgpEncrypt = account.GPG.Enabled && account.GPG.AutoEncrypt
+}
+
+func (a *App) cycleComposePGPMode() {
+	if a.compose == nil {
+		return
+	}
+	account := a.composeAccount()
+	if !account.GPG.Enabled {
+		a.compose.pgpSign = false
+		a.compose.pgpEncrypt = false
+		a.status = "OpenPGP is disabled for " + account.Name
+		return
+	}
+	switch {
+	case !a.compose.pgpSign && !a.compose.pgpEncrypt:
+		a.compose.pgpSign = true
+	case a.compose.pgpSign && !a.compose.pgpEncrypt:
+		a.compose.pgpSign = false
+		a.compose.pgpEncrypt = true
+	case !a.compose.pgpSign && a.compose.pgpEncrypt:
+		a.compose.pgpSign = true
+	default:
+		a.compose.pgpSign = false
+		a.compose.pgpEncrypt = false
+	}
+	a.status = "OpenPGP: " + composePGPModeName(a.compose, account)
+}
+
+func composePGPModeName(c *composeState, account config.Account) string {
+	if !account.GPG.Enabled {
+		return "Disabled"
+	}
+	if c == nil {
+		return "Off"
+	}
+	switch {
+	case c.pgpSign && c.pgpEncrypt:
+		return "Sign+Encrypt"
+	case c.pgpSign:
+		return "Sign"
+	case c.pgpEncrypt:
+		return "Encrypt"
+	default:
+		return "Off"
+	}
+}
+
+func pgpSettings(account config.Account) pgp.Settings {
+	return pgp.Settings{
+		Enabled:       account.GPG.Enabled,
+		Command:       account.GPG.Command,
+		HomeDir:       account.GPG.HomeDir,
+		SignKey:       account.GPG.SignKey,
+		EncryptToSelf: account.GPG.EncryptToSelf,
+	}
 }
 
 func (a *App) updateComposeFrom() {

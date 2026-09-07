@@ -1,4 +1,4 @@
-# MailSalon 0.1.0
+# MailSalon 0.2.0
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
@@ -58,6 +58,10 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Save incoming attachments to the active account's download directory.
 - Per-account signature files. Signatures are read when the message is sent,
   so changing a signature file does not require restarting MailSalon.
+- Optional per-account OpenPGP/GnuPG support using standard PGP/MIME: sign,
+  encrypt, or sign+encrypt complete MIME messages including attachments.
+- Automatic PGP/MIME decryption and detached-signature verification when a
+  protected message is opened; the preview displays the security result.
 - Delete to the active account's configured Trash folder; deletion is confirmed
   with a second `d` press.
 - Generic external receive command per account.
@@ -78,11 +82,12 @@ account selector, or use the mouse wheel over it to switch accounts.
   MailSalonSync.
 - An external sender such as `msmtp`, MailSalonSync JMAP submission, or your
   own compatible command.
+- Optional `gpg`/GnuPG installation when OpenPGP support is enabled.
 
 ## Version
 
-MailSalon 0.1.0 is the first named development release. Check the installed
-version with either:
+MailSalon 0.2.0 adds optional PGP/MIME signing, encryption, decryption, and
+signature verification through GnuPG. Check the installed version with either:
 
 ```sh
 MailSalon -version
@@ -92,7 +97,7 @@ MailSalon --version
 Both print:
 
 ```text
-MailSalon 0.1.0
+MailSalon 0.2.0
 ```
 
 ## Build
@@ -143,6 +148,14 @@ trash_folder = "Trash"
 download_dir = "~/Downloads"
 receive = "MailSalonSync -plain sync"
 send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
+
+[accounts.gpg]
+enabled = true
+command = "gpg"
+sign_key = "britney@cerberusgames.ca"
+auto_sign = false
+auto_encrypt = false
+encrypt_to_self = true
 
 [options]
 default_account = "cerberus"
@@ -239,6 +252,78 @@ standard `-- ` signature separator, MailSalon preserves it. Otherwise MailSalon
 adds the separator automatically. For replies and forwards, the signature is
 placed before the quoted/forwarded original message.
 
+### OpenPGP / GnuPG
+
+OpenPGP is optional and configured independently for each account. MailSalon
+uses the user's existing GnuPG keyring; it does not maintain its own key store.
+The `command` setting is an executable name/path rather than a shell command.
+If custom GnuPG arguments are required, point it at a wrapper script.
+
+```toml
+[[accounts]]
+name = "cerberus"
+maildir = "~/Maildir"
+from = "Britney Lozza <britney@cerberusgames.ca>"
+send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
+
+[accounts.gpg]
+enabled = true
+command = "gpg"
+# homedir = "~/.gnupg"
+sign_key = "britney@cerberusgames.ca"
+auto_sign = false
+auto_encrypt = false
+encrypt_to_self = true
+```
+
+Settings:
+
+- `enabled` enables GPG integration for the account.
+- `command` defaults to `gpg` and may be an executable path/name.
+- `homedir` optionally selects a different GnuPG home/keyring.
+- `sign_key` selects the signing key by email, fingerprint, or key ID. When it
+  is omitted, MailSalon tries the account's `From` address.
+- `auto_sign` and `auto_encrypt` select the initial mode in the compose UI.
+- `encrypt_to_self` defaults to `true` so the sender can normally decrypt mail
+  from the Sent folder later.
+
+In Compose/Reply/Forward, press `Ctrl+G` to cycle:
+
+```text
+Off -> Sign -> Encrypt -> Sign+Encrypt -> Off
+```
+
+Signing and encryption use PGP/MIME rather than inline armored text. When both
+are enabled, MailSalon signs the complete MIME entity first and then encrypts
+it, so message text and attachments are protected together. All To/Cc
+recipients are passed to GnuPG as normal recipients; Bcc recipients use GnuPG's
+hidden-recipient mode so their key IDs are not deliberately exposed as normal
+recipient packets.
+
+Encryption is fail-closed. If GnuPG cannot find or trust a required recipient
+key, MailSalon reports the error and does **not** fall back to sending the
+message in plaintext.
+
+When opening PGP/MIME mail, MailSalon automatically attempts decryption and
+signature verification using the active account's GnuPG settings. The message
+preview displays a line such as:
+
+```text
+OpenPGP: encrypted/decrypted; good signature from Alice <alice@example.com>
+```
+
+A bad or unverifiable signature is shown explicitly. If OpenPGP is disabled or
+the private key is unavailable, MailSalon leaves encrypted content protected
+and displays the decryption error instead of pretending it is readable.
+
+As with normal PGP/MIME, envelope/message headers such as From, To, Date, and
+Subject remain outside the encrypted MIME body. OpenPGP protects the MIME
+content and attachments, not those outer headers.
+
+GnuPG may use `gpg-agent`/pinentry when a private key requires a passphrase.
+Keys that are already unlocked in the agent provide the smoothest TUI
+experience.
+
 ### Receiving mail
 
 `receive` is intentionally generic. MailSalon executes the active account's
@@ -321,8 +406,9 @@ different account's transport configuration.
 
 The first row is `From` for new messages and forwards, or `Reply from` for
 replies. It displays the account name, email identity, and configured signature
-file. A four-line legend remains visible at the bottom of the screen and labels
-the current mode as `Compose`, `Reply`, or `Forward`.
+file. A four-line legend remains visible at the bottom of the screen, labels
+the current mode as `Compose`, `Reply`, or `Forward`, and shows the current
+OpenPGP mode.
 
 New messages and forwards initially focus the `To` field. Replies initially
 focus the message body so you can start typing above the quoted original text.
@@ -339,7 +425,8 @@ and identifies the bad field if parsing fails.
 | Left / Right while From is selected | Select sending account |
 | `h` / `l`, `j` / `k`, or Enter on From | Change sending account |
 | `Ctrl+A` | Add an attachment by file path |
-| `Ctrl+S` | Build the MIME message and run the selected account's send command |
+| `Ctrl+G` | Cycle OpenPGP mode: Off → Sign → Encrypt → Sign+Encrypt |
+| `Ctrl+S` | Build/protect the MIME message and run the selected account's send command |
 | `Esc` | Cancel composition |
 | Arrow keys | Move the cursor in normal input/body fields |
 
@@ -367,8 +454,10 @@ unread/read.
 
 Press `/` to search the currently open folder. Search is case-insensitive and
 checks From, To, Cc, Subject, Date, Message-ID, and the rendered plain-text
-body. Press Enter to apply the filter, Escape to cancel the prompt, or submit an
-empty search to restore the full folder.
+body. When OpenPGP is enabled for the active account, encrypted message bodies
+are decrypted as needed for body searching. Press Enter to apply the filter,
+Escape to cancel the prompt, or submit an empty search to restore the full
+folder.
 
 Deletion uses the active account's configured Trash Maildir. If that folder is
 not present, MailSalon refuses to delete instead of guessing a path. Deleting a
@@ -382,8 +471,9 @@ go test ./...
 
 The core packages include tests for configuration parsing, multi-account
 configuration, signature loading, Maildir discovery and movement, MIME
-construction/parsing with attachments, and external command stdin/stdout
-handling.
+construction/parsing with attachments, external command stdin/stdout handling,
+and a real GnuPG PGP/MIME sign+encrypt/decrypt+verify round-trip when `gpg` is
+available.
 
 ## Current scope
 
