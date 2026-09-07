@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -31,7 +32,39 @@ type Account struct {
 	SendCommand    string
 	DownloadDir    string
 	TrashFolder    string
+	ArchiveFolder  string
 	GPG            GPG
+}
+
+type Keybindings struct {
+	Quit            string
+	Compose         string
+	Sync            string
+	Reply           string
+	Forward         string
+	Archive         string
+	ToggleRead      string
+	Search          string
+	Delete          string
+	SaveAttachments string
+	SwitchAccount   string
+	Refresh         string
+	FocusNext       string
+	FocusLeft       string
+	FocusRight      string
+	MoveUp          string
+	MoveDown        string
+	PageUp          string
+	PageDown        string
+	Home            string
+	End             string
+	Open            string
+	Send            string
+	Attach          string
+	PGPMode         string
+	Cancel          string
+	NextField       string
+	PreviousField   string
 }
 
 type Theme struct {
@@ -56,6 +89,7 @@ type Config struct {
 	DefaultAccount string
 	StartupSync    bool
 	Theme          Theme
+	Keybindings    Keybindings
 }
 
 type fileGPG struct {
@@ -74,10 +108,42 @@ type fileAccount struct {
 	From          string  `toml:"from"`
 	SignatureFile string  `toml:"signature_file"`
 	TrashFolder   string  `toml:"trash_folder"`
+	ArchiveFolder string  `toml:"archive_folder"`
 	DownloadDir   string  `toml:"download_dir"`
 	Receive       string  `toml:"receive"`
 	Send          string  `toml:"send"`
 	GPG           fileGPG `toml:"gpg"`
+}
+
+type fileKeybindings struct {
+	Quit            string `toml:"quit"`
+	Compose         string `toml:"compose"`
+	Sync            string `toml:"sync"`
+	Reply           string `toml:"reply"`
+	Forward         string `toml:"forward"`
+	Archive         string `toml:"archive"`
+	ToggleRead      string `toml:"toggle_read"`
+	Search          string `toml:"search"`
+	Delete          string `toml:"delete"`
+	SaveAttachments string `toml:"save_attachments"`
+	SwitchAccount   string `toml:"switch_account"`
+	Refresh         string `toml:"refresh"`
+	FocusNext       string `toml:"focus_next"`
+	FocusLeft       string `toml:"focus_left"`
+	FocusRight      string `toml:"focus_right"`
+	MoveUp          string `toml:"move_up"`
+	MoveDown        string `toml:"move_down"`
+	PageUp          string `toml:"page_up"`
+	PageDown        string `toml:"page_down"`
+	Home            string `toml:"home"`
+	End             string `toml:"end"`
+	Open            string `toml:"open"`
+	Send            string `toml:"send"`
+	Attach          string `toml:"attach"`
+	PGPMode         string `toml:"pgp_mode"`
+	Cancel          string `toml:"cancel"`
+	NextField       string `toml:"next_field"`
+	PreviousField   string `toml:"previous_field"`
 }
 
 type fileTheme struct {
@@ -103,9 +169,10 @@ type fileConfig struct {
 	// Legacy single-account sections remain readable so early MailSalon
 	// prototype configs do not suddenly stop working.
 	Mail struct {
-		Maildir     string `toml:"maildir"`
-		TrashFolder string `toml:"trash_folder"`
-		DownloadDir string `toml:"download_dir"`
+		Maildir       string `toml:"maildir"`
+		TrashFolder   string `toml:"trash_folder"`
+		ArchiveFolder string `toml:"archive_folder"`
+		DownloadDir   string `toml:"download_dir"`
 	} `toml:"mail"`
 	Identity struct {
 		From          string `toml:"from"`
@@ -123,6 +190,8 @@ type fileConfig struct {
 	} `toml:"options"`
 
 	Theme fileTheme `toml:"theme"`
+
+	Keybindings fileKeybindings `toml:"keybindings"`
 }
 
 func DefaultTheme() Theme {
@@ -144,17 +213,93 @@ func DefaultTheme() Theme {
 	}
 }
 
+func DefaultKeybindings() Keybindings {
+	return Keybindings{
+		Quit:            "q",
+		Compose:         "c",
+		Sync:            "u",
+		Reply:           "r",
+		Forward:         "f",
+		Archive:         "e",
+		ToggleRead:      "m",
+		Search:          "/",
+		Delete:          "d",
+		SaveAttachments: "a",
+		SwitchAccount:   "A",
+		Refresh:         "R",
+		FocusNext:       "Tab",
+		FocusLeft:       "h",
+		FocusRight:      "l",
+		MoveUp:          "k",
+		MoveDown:        "j",
+		PageUp:          "PgUp",
+		PageDown:        "PgDn",
+		Home:            "Home",
+		End:             "End",
+		Open:            "Enter",
+		Send:            "Ctrl+S",
+		Attach:          "Ctrl+A",
+		PGPMode:         "Ctrl+G",
+		Cancel:          "Esc",
+		NextField:       "Tab",
+		PreviousField:   "Shift+Tab",
+	}
+}
+
+// KeybindingsWithDefaults fills any empty binding with MailSalon's built-in
+// default. This is useful for callers/tests that construct Config values in
+// memory instead of loading TOML through Load.
+func KeybindingsWithDefaults(k Keybindings) Keybindings {
+	d := DefaultKeybindings()
+	set := func(dst *string, src string) {
+		if strings.TrimSpace(src) != "" {
+			*dst = strings.TrimSpace(src)
+		}
+	}
+	set(&d.Quit, k.Quit)
+	set(&d.Compose, k.Compose)
+	set(&d.Sync, k.Sync)
+	set(&d.Reply, k.Reply)
+	set(&d.Forward, k.Forward)
+	set(&d.Archive, k.Archive)
+	set(&d.ToggleRead, k.ToggleRead)
+	set(&d.Search, k.Search)
+	set(&d.Delete, k.Delete)
+	set(&d.SaveAttachments, k.SaveAttachments)
+	set(&d.SwitchAccount, k.SwitchAccount)
+	set(&d.Refresh, k.Refresh)
+	set(&d.FocusNext, k.FocusNext)
+	set(&d.FocusLeft, k.FocusLeft)
+	set(&d.FocusRight, k.FocusRight)
+	set(&d.MoveUp, k.MoveUp)
+	set(&d.MoveDown, k.MoveDown)
+	set(&d.PageUp, k.PageUp)
+	set(&d.PageDown, k.PageDown)
+	set(&d.Home, k.Home)
+	set(&d.End, k.End)
+	set(&d.Open, k.Open)
+	set(&d.Send, k.Send)
+	set(&d.Attach, k.Attach)
+	set(&d.PGPMode, k.PGPMode)
+	set(&d.Cancel, k.Cancel)
+	set(&d.NextField, k.NextField)
+	set(&d.PreviousField, k.PreviousField)
+	return d
+}
+
 func Default() Config {
 	home, _ := os.UserHomeDir()
 	return Config{
 		Accounts: []Account{{
-			Name:        "default",
-			Maildir:     filepath.Join(home, "Maildir"),
-			DownloadDir: filepath.Join(home, "Downloads"),
-			TrashFolder: "Trash",
+			Name:          "default",
+			Maildir:       filepath.Join(home, "Maildir"),
+			DownloadDir:   filepath.Join(home, "Downloads"),
+			TrashFolder:   "Trash",
+			ArchiveFolder: "Archive",
 		}},
 		DefaultAccount: "default",
 		Theme:          DefaultTheme(),
+		Keybindings:    DefaultKeybindings(),
 	}
 }
 
@@ -191,6 +336,7 @@ func Load(path string) (Config, error) {
 	cfg.StartupSync = raw.Options.StartupSync
 	cfg.DefaultAccount = strings.TrimSpace(raw.Options.DefaultAccount)
 	cfg.Theme = mergeTheme(DefaultTheme(), raw.Theme)
+	cfg.Keybindings = mergeKeybindings(DefaultKeybindings(), raw.Keybindings)
 	cfg.Accounts = nil
 
 	if len(raw.Accounts) > 0 {
@@ -205,6 +351,7 @@ func Load(path string) (Config, error) {
 			From:          raw.Identity.From,
 			SignatureFile: raw.Identity.SignatureFile,
 			TrashFolder:   raw.Mail.TrashFolder,
+			ArchiveFolder: raw.Mail.ArchiveFolder,
 			DownloadDir:   raw.Mail.DownloadDir,
 			Receive:       raw.Commands.Receive,
 			Send:          raw.Commands.Send,
@@ -217,6 +364,9 @@ func Load(path string) (Config, error) {
 		return cfg, err
 	}
 	if err := validateTheme(cfg.Theme); err != nil {
+		return cfg, err
+	}
+	if err := validateKeybindings(cfg.Keybindings); err != nil {
 		return cfg, err
 	}
 	if cfg.DefaultAccount == "" {
@@ -249,17 +399,101 @@ func normalizeAccount(a fileAccount, index int) Account {
 	if trash == "" {
 		trash = "Trash"
 	}
+	archive := strings.TrimSpace(a.ArchiveFolder)
+	if archive == "" {
+		archive = "Archive"
+	}
 	return Account{
 		Name:           name,
 		Maildir:        expandPath(maildirPath),
 		From:           strings.TrimSpace(a.From),
 		SignatureFile:  expandPath(a.SignatureFile),
 		TrashFolder:    trash,
+		ArchiveFolder:  archive,
 		DownloadDir:    expandPath(downloadDir),
 		ReceiveCommand: strings.TrimSpace(a.Receive),
 		SendCommand:    strings.TrimSpace(a.Send),
 		GPG:            normalizeGPG(a.GPG),
 	}
+}
+
+func mergeKeybindings(base Keybindings, raw fileKeybindings) Keybindings {
+	set := func(dst *string, src string) {
+		if s := strings.TrimSpace(src); s != "" {
+			*dst = s
+		}
+	}
+	set(&base.Quit, raw.Quit)
+	set(&base.Compose, raw.Compose)
+	set(&base.Sync, raw.Sync)
+	set(&base.Reply, raw.Reply)
+	set(&base.Forward, raw.Forward)
+	set(&base.Archive, raw.Archive)
+	set(&base.ToggleRead, raw.ToggleRead)
+	set(&base.Search, raw.Search)
+	set(&base.Delete, raw.Delete)
+	set(&base.SaveAttachments, raw.SaveAttachments)
+	set(&base.SwitchAccount, raw.SwitchAccount)
+	set(&base.Refresh, raw.Refresh)
+	set(&base.FocusNext, raw.FocusNext)
+	set(&base.FocusLeft, raw.FocusLeft)
+	set(&base.FocusRight, raw.FocusRight)
+	set(&base.MoveUp, raw.MoveUp)
+	set(&base.MoveDown, raw.MoveDown)
+	set(&base.PageUp, raw.PageUp)
+	set(&base.PageDown, raw.PageDown)
+	set(&base.Home, raw.Home)
+	set(&base.End, raw.End)
+	set(&base.Open, raw.Open)
+	set(&base.Send, raw.Send)
+	set(&base.Attach, raw.Attach)
+	set(&base.PGPMode, raw.PGPMode)
+	set(&base.Cancel, raw.Cancel)
+	set(&base.NextField, raw.NextField)
+	set(&base.PreviousField, raw.PreviousField)
+	return base
+}
+
+func validateKeybindings(k Keybindings) error {
+	main := map[string]string{
+		"quit": k.Quit, "compose": k.Compose, "sync": k.Sync, "reply": k.Reply,
+		"forward": k.Forward, "archive": k.Archive, "toggle_read": k.ToggleRead,
+		"search": k.Search, "delete": k.Delete, "save_attachments": k.SaveAttachments,
+		"switch_account": k.SwitchAccount, "refresh": k.Refresh, "focus_next": k.FocusNext,
+		"focus_left": k.FocusLeft, "focus_right": k.FocusRight, "move_up": k.MoveUp,
+		"move_down": k.MoveDown, "page_up": k.PageUp, "page_down": k.PageDown,
+		"home": k.Home, "end": k.End, "open": k.Open,
+	}
+	compose := map[string]string{
+		"send": k.Send, "attach": k.Attach, "pgp_mode": k.PGPMode,
+		"cancel": k.Cancel, "next_field": k.NextField, "previous_field": k.PreviousField,
+	}
+	for groupName, group := range map[string]map[string]string{"main": main, "compose": compose} {
+		seen := map[string]string{}
+		for action, key := range group {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				return fmt.Errorf("keybindings.%s cannot be empty", action)
+			}
+			canonical := keybindingConflictKey(key)
+			if previous, exists := seen[canonical]; exists {
+				return fmt.Errorf("keybindings.%s conflicts with %s binding %q", action, previous, key)
+			}
+			seen[canonical] = action
+		}
+		_ = groupName
+	}
+	return nil
+}
+
+func keybindingConflictKey(key string) string {
+	key = strings.TrimSpace(key)
+	if utf8.RuneCountInString(key) == 1 {
+		// gotui distinguishes printable lowercase and uppercase runes, so `a`
+		// and `A` are valid separate bindings.
+		return "rune:" + key
+	}
+	return "named:" + strings.ToLower(key)
 }
 
 func normalizeGPG(raw fileGPG) GPG {

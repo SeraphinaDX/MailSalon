@@ -21,6 +21,7 @@ maildir = "~/Maildir"
 from = "Example User <user@example.com>"
 signature_file = "` + sig + `"
 trash_folder = "Trash"
+archive_folder = "Archive"
 download_dir = "~/Downloads/MailSalon"
 receive = "MailSalonSync -plain sync"
 send = "MailSalonSync -plain jmap-send -account personal-jmap"
@@ -35,6 +36,13 @@ send = "msmtp -a work -t"
 [options]
 default_account = "work"
 startup_sync = true
+
+[keybindings]
+compose = "n"
+sync = "s"
+archive = "v"
+reply = "p"
+send = "Ctrl+X"
 `
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
@@ -53,6 +61,15 @@ startup_sync = true
 	if cfg.Accounts[0].SendCommand != "MailSalonSync -plain jmap-send -account personal-jmap" {
 		t.Fatalf("send command not loaded: %#v", cfg.Accounts[0])
 	}
+	if cfg.Accounts[0].ArchiveFolder != "Archive" {
+		t.Fatalf("archive folder not loaded: %#v", cfg.Accounts[0])
+	}
+	if cfg.Keybindings.Compose != "n" || cfg.Keybindings.Sync != "s" || cfg.Keybindings.Archive != "v" || cfg.Keybindings.Reply != "p" {
+		t.Fatalf("keybindings not loaded: %#v", cfg.Keybindings)
+	}
+	if cfg.Keybindings.Send != "Ctrl+X" {
+		t.Fatalf("compose send binding not loaded: %#v", cfg.Keybindings)
+	}
 	if !cfg.StartupSync {
 		t.Fatal("startup_sync was not loaded")
 	}
@@ -62,6 +79,43 @@ startup_sync = true
 	s, err := ReadSignature(cfg.Accounts[0])
 	if err != nil || s != "Example signature" {
 		t.Fatalf("signature = %q, err=%v", s, err)
+	}
+}
+
+func TestKeybindingsDefaults(t *testing.T) {
+	k := DefaultKeybindings()
+	if k.Compose != "c" || k.Sync != "u" || k.Archive != "e" || k.Send != "Ctrl+S" {
+		t.Fatalf("unexpected default keybindings: %#v", k)
+	}
+}
+
+func TestLoadRejectsDuplicateKeybinding(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := `
+[[accounts]]
+name = "personal"
+maildir = "~/Maildir"
+
+[keybindings]
+compose = "x"
+reply = "x"
+`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("expected duplicate keybinding error, got %v", err)
+	}
+}
+
+func TestUpperAndLowercaseBindingsCanDiffer(t *testing.T) {
+	k := DefaultKeybindings()
+	k.SaveAttachments = "a"
+	k.SwitchAccount = "A"
+	if err := validateKeybindings(k); err != nil {
+		t.Fatalf("uppercase/lowercase bindings should be distinct: %v", err)
 	}
 }
 

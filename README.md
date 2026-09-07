@@ -1,19 +1,9 @@
-# MailSalon 0.2.0
+# MailSalon 0.3.0
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
 and modifies local Maildirs, while tools such as `mbsync`, `offlineimap`,
 `MailSalonSync`, `msmtp`, or custom wrapper scripts handle receiving and sending.
-
-## LLM Policy
-
-This project does not discriminate against LLM generated code.
-
-This project uses LLM generated code.
-
-Due to the nature of the code, the Go language was used to make it memory safe.
-
-Go code is perfect for LLM. There is only one way to write idiomatic Go code.
 
 ## Design
 
@@ -41,7 +31,7 @@ account selector, or use the mouse wheel over it to switch accounts.
 │ Trash                │├─ j/k Scroll  r Reply  f Fwd  m Read/Unread / Search ┤
 └──────────────────────┘└────────────────────────────────────────────────────┘
  [cerberus] Ready
- c Compose  u Update mail  r Reply  f Forward  m Read/unread  / Search
+ c Compose  u Sync  r Reply  f Forward  e Archive  m Read/unread  / Search
  d Delete  a Save attachments  A Switch account  Tab Focus  j/k Move  Enter Open  R Refresh  q Quit
 ```
 
@@ -54,7 +44,7 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Left-side folder navigation.
 - Wide From / Subject / Date message table.
 - Plain-text message preview. HTML-only messages are converted to readable terminal text, preserving paragraphs, lists, and useful link destinations while discarding scripts/styles.
-- Contextual keybind hints are displayed directly on the message-preview pane.
+- Contextual keybind hints are displayed directly on the message-preview pane and are generated from the configured keybindings.
 - Manual read/unread toggle using the Maildir `S` (Seen) flag.
 - Case-insensitive search within the current folder across sender, recipients,
   subject, date, Message-ID, and message body.
@@ -72,13 +62,15 @@ account selector, or use the mouse wheel over it to switch accounts.
   encrypt, or sign+encrypt complete MIME messages including attachments.
 - Automatic PGP/MIME decryption and detached-signature verification when a
   protected message is opened; the preview displays the security result.
+- Archive to the active account's configured Archive folder when that Maildir exists.
 - Delete to the active account's configured Trash folder; deletion is confirmed
-  with a second `d` press.
+  with a second press of the configured delete key.
 - Generic external receive command per account.
 - Generic external send command per account. MailSalon writes the complete RFC
   5322/MIME message to the command's standard input.
 - Mouse selection and mouse-wheel scrolling.
-- Persistent on-screen key hints, including a mode-aware legend while composing, replying, or forwarding.
+- TOML-configurable keybindings for mail actions, navigation, and compose actions.
+- Persistent on-screen key hints generated from the active keybindings, including a mode-aware legend while composing, replying, or forwarding.
 - TOML-configurable truecolor UI themes, including pane backgrounds, borders, active focus, titles, selections, unread mail, account identity, status/error text, and compose cursors.
 - Always-visible account selector and Update Mail control above the folder list with keyboard and mouse hints.
 - Keyboard-only operation remains fully supported.
@@ -96,8 +88,7 @@ account selector, or use the mouse wheel over it to switch accounts.
 
 ## Version
 
-MailSalon 0.2.0 adds optional PGP/MIME signing, encryption, decryption, and
-signature verification through GnuPG. Check the installed version with either:
+MailSalon 0.3.0 adds Archive support plus TOML-configurable keybindings whose on-screen legends update automatically. OpenPGP/GnuPG support from 0.2.0 remains available. Check the installed version with either:
 
 ```sh
 MailSalon -version
@@ -107,7 +98,7 @@ MailSalon --version
 Both print:
 
 ```text
-MailSalon 0.2.0
+MailSalon 0.3.0
 ```
 
 ## Build
@@ -155,6 +146,7 @@ maildir = "~/Maildir"
 from = "Britney Lozza <britney@cerberusgames.ca>"
 signature_file = "~/.signature"
 trash_folder = "Trash"
+archive_folder = "Archive"
 download_dir = "~/Downloads"
 receive = "MailSalonSync -plain sync"
 send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
@@ -183,6 +175,7 @@ maildir = "~/Maildir"
 from = "Britney Lozza <britney@cerberusgames.ca>"
 signature_file = "~/.signature"
 trash_folder = "Trash"
+archive_folder = "Archive"
 download_dir = "~/Downloads"
 receive = "MailSalonSync -plain sync"
 send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
@@ -193,6 +186,7 @@ maildir = "~/Maildir-work"
 from = "Britney Lozza <britney@work.example>"
 signature_file = "~/.signature-work"
 trash_folder = "Trash"
+archive_folder = "Archive"
 download_dir = "~/Downloads"
 receive = "mbsync work"
 send = "msmtp -a work -t"
@@ -207,6 +201,47 @@ MailSalon starts.
 
 The earlier single-account `[mail]`, `[identity]`, and `[commands]` format is
 still accepted for compatibility, but `[[accounts]]` is the recommended format.
+
+
+### Keybindings
+
+MailSalon action keys can be changed in `config.toml`. The main-view, message-preview, and compose legends are generated from these values, so the UI always shows the keys that are actually active. Single-character bindings are case-sensitive (`a` and `A` are different). Named keys use friendly names such as `Tab`, `Shift+Tab`, `Enter`, `Esc`, `PgUp`, and `PgDn`. `Ctrl+X`-style bindings are supported for single-character control combinations.
+
+```toml
+[keybindings]
+quit = "q"
+compose = "c"
+sync = "u"
+reply = "r"
+forward = "f"
+archive = "e"
+toggle_read = "m"
+search = "/"
+delete = "d"
+save_attachments = "a"
+switch_account = "A"
+refresh = "R"
+
+focus_next = "Tab"
+focus_left = "h"
+focus_right = "l"
+move_up = "k"
+move_down = "j"
+page_up = "PgUp"
+page_down = "PgDn"
+home = "Home"
+end = "End"
+open = "Enter"
+
+send = "Ctrl+S"
+attach = "Ctrl+A"
+pgp_mode = "Ctrl+G"
+cancel = "Esc"
+next_field = "Tab"
+previous_field = "Shift+Tab"
+```
+
+Duplicate bindings within the same UI mode are rejected at startup instead of making one action silently unreachable. Mouse controls are unchanged by keyboard remapping.
 
 ### Themes
 
@@ -387,6 +422,8 @@ different account's transport configuration.
 
 ## Keyboard controls
 
+The tables below show the defaults. Any configurable entry is reflected automatically in the on-screen legend after remapping it under `[keybindings]`.
+
 ### Mail view
 
 | Key | Action |
@@ -401,14 +438,14 @@ different account's transport configuration.
 | `Home` / `End` | Jump to beginning/end |
 | `Enter` | Open selected folder/message |
 | `c` | Compose a new message |
+| `u` | Sync: run the active account's receive command and rescan |
 | `r` | Reply |
 | `f` | Forward |
+| `e` | Archive the selected message when the configured Archive folder exists |
 | `m` | Toggle the selected message between read and unread |
 | `/` | Search the current folder; submit an empty search to clear the filter |
 | `d`, then `d` | Delete / confirm delete |
 | `a` | Save all attachments from the selected message |
-| `u` | Update mail: run the active account's receive command and rescan |
-| `s` | Alias for Update mail |
 | `R` | Rescan the active Maildir without running a receive command |
 | `q` / `Ctrl+C` | Quit |
 
@@ -468,6 +505,8 @@ body. When OpenPGP is enabled for the active account, encrypted message bodies
 are decrypted as needed for body searching. Press Enter to apply the filter,
 Escape to cancel the prompt, or submit an empty search to restore the full
 folder.
+
+Archiving uses the active account's configured `archive_folder` (default `Archive`). MailSalon only enables and advertises Archive when that Maildir is actually present; it does not create the folder automatically. A manually created ordinary Maildir named `Archive` works, as does a Maildir++ `.Archive` folder; no server-side Archive role is required. The move preserves the message's Maildir Seen/unread state so the external sync tool can propagate the move.
 
 Deletion uses the active account's configured Trash Maildir. If that folder is
 not present, MailSalon refuses to delete instead of guessing a path. Deleting a

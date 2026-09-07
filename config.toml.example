@@ -11,6 +11,8 @@ maildir = "~/Maildir"
 from = "Britney Lozza <britney@cerberusgames.ca>"
 signature_file = "~/.signature"
 trash_folder = "Trash"
+# Matches a plain Archive Maildir or Maildir++ .Archive; no server role is required.
+archive_folder = "Archive"
 download_dir = "~/Downloads"
 receive = "MailSalonSync -plain sync"
 send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
@@ -34,6 +36,7 @@ encrypt_to_self = true
 # from = "Your Name <you@work.example>"
 # signature_file = "~/.signature-work"
 # trash_folder = "Trash"
+# archive_folder = "Archive"
 # download_dir = "~/Downloads"
 # receive = "mbsync work"
 # send = "msmtp -a work -t"
@@ -49,6 +52,39 @@ encrypt_to_self = true
 [options]
 default_account = "cerberus"
 startup_sync = false
+
+
+# Optional keybindings. These are the defaults; omit any entry you do not want
+# to change. The on-screen legends use the configured values automatically.
+[keybindings]
+quit = "q"
+compose = "c"
+sync = "u"
+reply = "r"
+forward = "f"
+archive = "e"
+toggle_read = "m"
+search = "/"
+delete = "d"
+save_attachments = "a"
+switch_account = "A"
+refresh = "R"
+focus_next = "Tab"
+focus_left = "h"
+focus_right = "l"
+move_up = "k"
+move_down = "j"
+page_up = "PgUp"
+page_down = "PgDn"
+home = "Home"
+end = "End"
+open = "Enter"
+send = "Ctrl+S"
+attach = "Ctrl+A"
+pgp_mode = "Ctrl+G"
+cancel = "Esc"
+next_field = "Tab"
+previous_field = "Shift+Tab"
 
 # Optional UI theme. Colors may be #RRGGBB truecolor values or supported
 # color names. Omitted theme values fall back to MailSalon's defaults.

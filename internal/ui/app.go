@@ -79,8 +79,6 @@ type resolvedTheme struct {
 	cursorBG     ui.Color
 }
 
-const messagePreviewLegend = "j/k Scroll  PgUp/PgDn Page  r Reply  f Fwd  m Read/Unread  / Search  a Save  d Delete"
-
 type App struct {
 	cfg     config.Config
 	theme   resolvedTheme
@@ -164,7 +162,6 @@ func New(cfg config.Config) (*App, error) {
 
 	a.preview = widgets.NewParagraph()
 	a.preview.Title = "Message"
-	a.preview.TitleBottom = messagePreviewLegend
 	a.preview.WrapText = false
 	a.preview.BorderRounded = true
 
@@ -343,38 +340,57 @@ func (a *App) openMessage(index int) error {
 }
 
 func (a *App) handleKey(id string) bool {
-	if id != "d" {
+	keys := a.bindings()
+	if !bindingMatches(id, keys.Delete) {
 		a.deleteArmed = false
 	}
 
-	switch id {
-	case "q", "<C-c>":
+	if id == "<C-c>" || bindingMatches(id, keys.Quit) {
 		return true
-	case "<Tab>":
+	}
+	if bindingMatches(id, keys.FocusNext) {
 		a.focus = (a.focus + 1) % 3
-	case "<Left>", "h":
+		return false
+	}
+	if id == "<Left>" || bindingMatches(id, keys.FocusLeft) {
 		if a.focus != focusFolders {
 			a.focus = focusFolders
 		}
-	case "<Right>", "l":
+		return false
+	}
+	if id == "<Right>" || bindingMatches(id, keys.FocusRight) {
 		if a.focus == focusFolders {
 			a.focus = focusMessages
 		} else if a.focus == focusMessages {
 			a.focus = focusPreview
 		}
-	case "<Up>", "k":
+		return false
+	}
+	if id == "<Up>" || bindingMatches(id, keys.MoveUp) {
 		a.moveSelection(-1)
-	case "<Down>", "j":
+		return false
+	}
+	if id == "<Down>" || bindingMatches(id, keys.MoveDown) {
 		a.moveSelection(1)
-	case "<PageUp>":
+		return false
+	}
+	if bindingMatches(id, keys.PageUp) {
 		a.page(-1)
-	case "<PageDown>":
+		return false
+	}
+	if bindingMatches(id, keys.PageDown) {
 		a.page(1)
-	case "<Home>":
+		return false
+	}
+	if bindingMatches(id, keys.Home) {
 		a.homeEnd(false)
-	case "<End>":
+		return false
+	}
+	if bindingMatches(id, keys.End) {
 		a.homeEnd(true)
-	case "<Enter>":
+		return false
+	}
+	if bindingMatches(id, keys.Open) {
 		if a.focus == focusFolders {
 			if err := a.loadFolder(a.selectedFolder); err != nil {
 				a.setError(err)
@@ -388,46 +404,143 @@ func (a *App) handleKey(id string) bool {
 				a.focus = focusPreview
 			}
 		}
-	case "A":
+		return false
+	}
+	if bindingMatches(id, keys.SwitchAccount) {
 		a.switchAccount(1)
-	case "c":
+		return false
+	}
+	if bindingMatches(id, keys.Compose) {
 		a.startCompose(nil, false)
-	case "/":
+		return false
+	}
+	if bindingMatches(id, keys.Search) {
 		a.startSearch()
-	case "m":
+		return false
+	}
+	if bindingMatches(id, keys.ToggleRead) {
 		a.toggleSelectedRead()
-	case "r":
+		return false
+	}
+	if bindingMatches(id, keys.Reply) {
 		if a.parsed == nil {
 			a.status = "No message selected"
 		} else {
 			a.startCompose(a.parsed, false)
 		}
-	case "f":
+		return false
+	}
+	if bindingMatches(id, keys.Forward) {
 		if a.parsed == nil {
 			a.status = "No message selected"
 		} else {
 			a.startCompose(a.parsed, true)
 		}
-	case "d":
+		return false
+	}
+	if bindingMatches(id, keys.Archive) {
+		a.archiveSelected()
+		return false
+	}
+	if bindingMatches(id, keys.Delete) {
 		if !a.deleteArmed {
 			a.deleteArmed = true
-			a.status = "Press d again to delete the selected message"
+			a.status = fmt.Sprintf("Press %s again to delete the selected message", keyLabel(keys.Delete))
 		} else {
 			a.deleteSelected()
 			a.deleteArmed = false
 		}
-	case "a":
+		return false
+	}
+	if bindingMatches(id, keys.SaveAttachments) {
 		a.saveAttachments()
-	case "s", "u":
+		return false
+	}
+	if bindingMatches(id, keys.Sync) {
 		a.runSync()
-	case "R":
+		return false
+	}
+	if bindingMatches(id, keys.Refresh) {
 		if err := a.refreshFolders(); err != nil {
 			a.setError(err)
 		} else {
 			a.status = "Maildir refreshed"
 		}
+		return false
 	}
 	return false
+}
+
+func (a *App) bindings() config.Keybindings {
+	return config.KeybindingsWithDefaults(a.cfg.Keybindings)
+}
+
+func bindingMatches(eventID, binding string) bool {
+	return eventID == bindingEventID(binding)
+}
+
+func bindingEventID(binding string) string {
+	binding = strings.TrimSpace(binding)
+	if binding == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(binding) == 1 {
+		return binding
+	}
+	if strings.HasPrefix(binding, "<") && strings.HasSuffix(binding, ">") {
+		return binding
+	}
+	lower := strings.ToLower(binding)
+	if strings.HasPrefix(lower, "ctrl+") {
+		key := strings.TrimSpace(binding[len("Ctrl+"):])
+		if utf8.RuneCountInString(key) == 1 {
+			return "<C-" + strings.ToLower(key) + ">"
+		}
+	}
+	switch lower {
+	case "esc", "escape":
+		return "<Escape>"
+	case "tab":
+		return "<Tab>"
+	case "shift+tab", "backtab":
+		return "<Backtab>"
+	case "enter", "return":
+		return "<Enter>"
+	case "pgup", "pageup", "page up":
+		return "<PageUp>"
+	case "pgdn", "pagedown", "page down":
+		return "<PageDown>"
+	case "home":
+		return "<Home>"
+	case "end":
+		return "<End>"
+	case "left":
+		return "<Left>"
+	case "right":
+		return "<Right>"
+	case "up":
+		return "<Up>"
+	case "down":
+		return "<Down>"
+	case "space":
+		return " "
+	}
+	return binding
+}
+
+func keyLabel(binding string) string {
+	binding = strings.TrimSpace(binding)
+	if binding == "" {
+		return "?"
+	}
+	if strings.HasPrefix(binding, "<") && strings.HasSuffix(binding, ">") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(binding, "<"), ">")
+		if strings.HasPrefix(inner, "C-") {
+			return "Ctrl+" + strings.TrimPrefix(inner, "C-")
+		}
+		return inner
+	}
+	return binding
 }
 
 func (a *App) startSearch() {
@@ -730,6 +843,41 @@ func (a *App) deleteSelected() {
 	a.status = "Message deleted"
 }
 
+func (a *App) archiveSelected() {
+	if len(a.messages) == 0 || a.selectedMessage < 0 || a.selectedMessage >= len(a.messages) {
+		a.status = "No message selected"
+		return
+	}
+	account := a.currentAccount()
+	archive, ok := maildir.FindFolder(a.folders, account.ArchiveFolder)
+	if !ok {
+		a.status = fmt.Sprintf("Archive folder %q not found", account.ArchiveFolder)
+		return
+	}
+	entry := a.messages[a.selectedMessage]
+	if err := maildir.Archive(entry, archive); err != nil {
+		a.setError(err)
+		return
+	}
+	if err := a.loadFolder(a.selectedFolder); err != nil {
+		a.setError(err)
+		return
+	}
+	if a.selectedMessage >= len(a.messages) && len(a.messages) > 0 {
+		a.selectedMessage = len(a.messages) - 1
+		_ = a.openMessage(a.selectedMessage)
+	}
+	a.status = "Message archived"
+}
+
+func (a *App) archiveAvailable() bool {
+	if len(a.folders) == 0 {
+		return false
+	}
+	_, ok := maildir.FindFolder(a.folders, a.currentAccount().ArchiveFolder)
+	return ok
+}
+
 func (a *App) saveAttachments() {
 	if a.parsed == nil {
 		a.status = "No message selected"
@@ -849,38 +997,44 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 	if c.attachPrompt.Text != "" || c.attachPrompt.TitleBottom == "active" {
 		return a.handleAttachPrompt(e.ID)
 	}
+	keys := a.bindings()
 
-	switch e.ID {
-	case "<C-c>":
+	if e.ID == "<C-c>" {
 		return true
-	case "<Escape>":
+	}
+	if bindingMatches(e.ID, keys.Cancel) {
 		a.compose = nil
 		a.status = "Compose cancelled"
 		return false
-	case "<C-s>":
+	}
+	if bindingMatches(e.ID, keys.Send) {
 		a.sendCompose()
 		return false
-	case "<C-a>":
+	}
+	if bindingMatches(e.ID, keys.Attach) {
 		c.attachPrompt.Text = ""
 		c.attachPrompt.Cursor = 0
 		c.attachPrompt.TitleBottom = "active"
 		return false
-	case "<C-g>":
+	}
+	if bindingMatches(e.ID, keys.PGPMode) {
 		a.cycleComposePGPMode()
 		return false
-	case "<Tab>":
+	}
+	if bindingMatches(e.ID, keys.NextField) {
 		c.field = (c.field + 1) % 6
 		return false
-	case "<Backtab>", "<S-Tab>":
+	}
+	if bindingMatches(e.ID, keys.PreviousField) || (bindingEventID(keys.PreviousField) == "<Backtab>" && e.ID == "<S-Tab>") {
 		c.field = (c.field + 5) % 6
 		return false
 	}
 
 	if c.field == composeFrom {
-		switch e.ID {
-		case "<Left>", "h", "<Up>", "k":
+		switch {
+		case e.ID == "<Left>", e.ID == "<Up>", bindingMatches(e.ID, keys.FocusLeft), bindingMatches(e.ID, keys.MoveUp):
 			a.cycleComposeAccount(-1)
-		case "<Right>", "l", "<Down>", "j", "<Enter>", " ":
+		case e.ID == "<Right>", e.ID == "<Down>", bindingMatches(e.ID, keys.FocusRight), bindingMatches(e.ID, keys.MoveDown), bindingMatches(e.ID, keys.Open), e.ID == " ":
 			a.cycleComposeAccount(1)
 		}
 		return false
@@ -895,13 +1049,16 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 
 func (a *App) handleAttachPrompt(id string) bool {
 	c := a.compose
-	switch id {
-	case "<C-c>":
+	keys := a.bindings()
+	if id == "<C-c>" {
 		return true
-	case "<Escape>":
+	}
+	if bindingMatches(id, keys.Cancel) {
 		c.attachPrompt.Text = ""
 		c.attachPrompt.TitleBottom = ""
-	case "<Enter>":
+		return false
+	}
+	if id == "<Enter>" {
 		path := expandUserPath(strings.TrimSpace(c.attachPrompt.Text))
 		st, err := os.Stat(path)
 		if err != nil {
@@ -916,9 +1073,9 @@ func (a *App) handleAttachPrompt(id string) bool {
 		c.attachPrompt.Text = ""
 		c.attachPrompt.TitleBottom = ""
 		a.status = "Attached " + filepath.Base(path)
-	default:
-		a.editInput(c.attachPrompt, id)
+		return false
 	}
+	a.editInput(c.attachPrompt, id)
 	return false
 }
 
@@ -1151,10 +1308,11 @@ func (a *App) render() {
 
 func (a *App) populateAccountBar() {
 	account := a.currentAccount()
+	keys := a.bindings()
 	if len(a.cfg.Accounts) > 1 {
 		a.accountBar.Title = safeUI(fmt.Sprintf("Account %d/%d", a.account+1, len(a.cfg.Accounts)))
 		a.accountBar.Text = safeUI("‹ " + account.Name + " ›")
-		a.accountBar.TitleBottom = "A/Click switch"
+		a.accountBar.TitleBottom = safeUI(keyLabel(keys.SwitchAccount) + "/Click switch")
 	} else {
 		a.accountBar.Title = "Account"
 		a.accountBar.Text = safeUI(account.Name)
@@ -1164,6 +1322,7 @@ func (a *App) populateAccountBar() {
 
 func (a *App) populateUpdateBar() {
 	account := a.currentAccount()
+	keys := a.bindings()
 	a.updateBar.Title = "Update Mail"
 	a.updateBar.Text = "↻ Update"
 	if strings.TrimSpace(account.ReceiveCommand) == "" {
@@ -1171,7 +1330,7 @@ func (a *App) populateUpdateBar() {
 		a.updateBar.TitleBottom = "no receive command"
 		return
 	}
-	a.updateBar.TitleBottom = "u/Click update"
+	a.updateBar.TitleBottom = safeUI(keyLabel(keys.Sync) + "/Click update")
 }
 
 func (a *App) populateFolderList() {
@@ -1232,6 +1391,7 @@ func (a *App) populateMessageTable() {
 }
 
 func (a *App) populatePreview() {
+	a.preview.TitleBottom = a.messagePreviewLegend()
 	if a.parsed == nil {
 		a.preview.Text = "No message selected."
 		return
@@ -1288,10 +1448,54 @@ func (a *App) updateFocusStyles() {
 
 func (a *App) footerText() string {
 	account := a.currentAccount()
+	keys := a.bindings()
 	line1 := fmt.Sprintf(" [%s] %s", account.Name, a.status)
-	line2 := " c Compose  u Update mail  r Reply  f Forward  m Read/unread  / Search"
-	line3 := " d Delete  a Save attachments  A Switch account  Tab Focus  j/k Move  Enter Open  R Refresh  q Quit"
+	line2Parts := []string{
+		keyLabel(keys.Compose) + " Compose",
+		keyLabel(keys.Sync) + " Sync",
+		keyLabel(keys.Reply) + " Reply",
+		keyLabel(keys.Forward) + " Forward",
+	}
+	if a.archiveAvailable() {
+		line2Parts = append(line2Parts, keyLabel(keys.Archive)+" Archive")
+	}
+	line2Parts = append(line2Parts,
+		keyLabel(keys.ToggleRead)+" Read/unread",
+		keyLabel(keys.Search)+" Search",
+	)
+	line3Parts := []string{
+		keyLabel(keys.Delete) + " Delete",
+		keyLabel(keys.SaveAttachments) + " Save attachments",
+		keyLabel(keys.SwitchAccount) + " Switch account",
+		keyLabel(keys.FocusNext) + " Focus",
+		keyLabel(keys.MoveDown) + "/" + keyLabel(keys.MoveUp) + " Move",
+		keyLabel(keys.Open) + " Open",
+		keyLabel(keys.Refresh) + " Refresh",
+		keyLabel(keys.Quit) + " Quit",
+	}
+	line2 := " " + strings.Join(line2Parts, "  ")
+	line3 := " " + strings.Join(line3Parts, "  ")
 	return safeUI(line1 + "\n" + line2 + "\n" + line3)
+}
+
+func (a *App) messagePreviewLegend() string {
+	keys := a.bindings()
+	parts := []string{
+		keyLabel(keys.MoveDown) + "/" + keyLabel(keys.MoveUp) + " Scroll",
+		keyLabel(keys.PageUp) + "/" + keyLabel(keys.PageDown) + " Page",
+		keyLabel(keys.Reply) + " Reply",
+		keyLabel(keys.Forward) + " Fwd",
+	}
+	if a.archiveAvailable() {
+		parts = append(parts, keyLabel(keys.Archive)+" Archive")
+	}
+	parts = append(parts,
+		keyLabel(keys.ToggleRead)+" Read/Unread",
+		keyLabel(keys.Search)+" Search",
+		keyLabel(keys.SaveAttachments)+" Save",
+		keyLabel(keys.Delete)+" Delete",
+	)
+	return safeUI(strings.Join(parts, "  "))
 }
 
 func (a *App) renderCompose(w, h int) {
@@ -1338,17 +1542,20 @@ func (a *App) renderCompose(w, h int) {
 	}
 
 	a.footer.SetRect(0, footerY, w, h)
+	keys := a.bindings()
 	fromLabel := "From"
 	fromHint := "From: selected account identity"
 	if c.isReply {
 		fromLabel = "Reply from"
 	}
 	if len(a.cfg.Accounts) > 1 {
-		fromHint = fromLabel + ": ←/→ switch account"
+		fromHint = fmt.Sprintf("%s: %s/%s switch account", fromLabel, keyLabel(keys.FocusLeft), keyLabel(keys.FocusRight))
 	}
 	legend := fmt.Sprintf(
-		" [%s] %s — OpenPGP: %s\n Ctrl+S Send  Ctrl+A Attach  Ctrl+G PGP mode  Esc Cancel  Tab/Shift+Tab Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline\n %s  Backspace/Delete Edit",
-		composeModeName(c), a.status, composePGPModeName(c, a.composeAccount()), fromHint,
+		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline\n %s  Backspace/Delete Edit",
+		composeModeName(c), a.status, composePGPModeName(c, a.composeAccount()),
+		keyLabel(keys.Send), keyLabel(keys.Attach), keyLabel(keys.PGPMode), keyLabel(keys.Cancel),
+		keyLabel(keys.NextField), keyLabel(keys.PreviousField), fromHint,
 	)
 	a.footer.Text = safeUI(legend)
 	a.updateFooterStyle()
@@ -1685,7 +1892,8 @@ func (a *App) updateComposeFrom() {
 	}
 	a.compose.from.Text = safeUI(text)
 	if len(a.cfg.Accounts) > 1 {
-		a.compose.from.TitleBottom = "←/→ select"
+		keys := a.bindings()
+		a.compose.from.TitleBottom = safeUI(keyLabel(keys.FocusLeft) + "/" + keyLabel(keys.FocusRight) + " select")
 	} else {
 		a.compose.from.TitleBottom = ""
 	}

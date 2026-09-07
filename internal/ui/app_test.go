@@ -60,7 +60,7 @@ func TestMainLegendShowsComposeAndUpdate(t *testing.T) {
 		status: "Ready",
 	}
 	legend := a.footerText()
-	for _, want := range []string{"c Compose", "u Update mail", "m Read/unread", "/ Search"} {
+	for _, want := range []string{"c Compose", "u Sync", "m Read/unread", "/ Search"} {
 		if !strings.Contains(legend, want) {
 			t.Fatalf("main legend missing %q: %q", want, legend)
 		}
@@ -68,9 +68,61 @@ func TestMainLegendShowsComposeAndUpdate(t *testing.T) {
 }
 
 func TestPreviewLegendShowsReadToggleAndSearch(t *testing.T) {
+	a := &App{cfg: config.Config{Accounts: []config.Account{{Name: "test"}}}}
+	legend := a.messagePreviewLegend()
 	for _, want := range []string{"m Read/Unread", "/ Search"} {
-		if !strings.Contains(messagePreviewLegend, want) {
-			t.Fatalf("message preview legend missing %q: %q", want, messagePreviewLegend)
+		if !strings.Contains(legend, want) {
+			t.Fatalf("message preview legend missing %q: %q", want, legend)
+		}
+	}
+}
+
+func TestLegendsReflectConfiguredKeybindings(t *testing.T) {
+	a := &App{
+		cfg: config.Config{
+			Accounts: []config.Account{{Name: "test", ArchiveFolder: "Archive"}},
+			Keybindings: config.Keybindings{
+				Compose:         "n",
+				Sync:            "s",
+				Reply:           "p",
+				Forward:         "F",
+				Archive:         "v",
+				ToggleRead:      "t",
+				Search:          "?",
+				Delete:          "x",
+				SaveAttachments: "z",
+			},
+		},
+		folders: []maildir.Folder{{Name: "Archive", Path: "/tmp/archive"}},
+		status:  "Ready",
+	}
+	mainLegend := a.footerText()
+	for _, want := range []string{"n Compose", "s Sync", "p Reply", "F Forward", "v Archive", "t Read/unread", "? Search", "x Delete", "z Save attachments"} {
+		if !strings.Contains(mainLegend, want) {
+			t.Fatalf("custom main legend missing %q: %q", want, mainLegend)
+		}
+	}
+	previewLegend := a.messagePreviewLegend()
+	for _, want := range []string{"p Reply", "F Fwd", "v Archive", "t Read/Unread", "? Search", "z Save", "x Delete"} {
+		if !strings.Contains(previewLegend, want) {
+			t.Fatalf("custom preview legend missing %q: %q", want, previewLegend)
+		}
+	}
+}
+
+func TestBindingEventID(t *testing.T) {
+	tests := map[string]string{
+		"c":         "c",
+		"A":         "A",
+		"Ctrl+S":    "<C-s>",
+		"Esc":       "<Escape>",
+		"Tab":       "<Tab>",
+		"Shift+Tab": "<Backtab>",
+		"PgUp":      "<PageUp>",
+	}
+	for input, want := range tests {
+		if got := bindingEventID(input); got != want {
+			t.Fatalf("bindingEventID(%q) = %q, want %q", input, got, want)
 		}
 	}
 }

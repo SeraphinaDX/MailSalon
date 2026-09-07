@@ -263,6 +263,25 @@ func Delete(e Entry, trash Folder) error {
 	return moveFile(e.Path, dst)
 }
 
+// Archive moves a message into an existing Archive Maildir without changing
+// its Seen state. Messages in new/ remain in new/; messages in cur/ retain
+// their Maildir flags. MailSalon deliberately does not create the Archive
+// folder automatically—the caller must discover and select an existing one.
+func Archive(e Entry, archive Folder) error {
+	if samePath(filepath.Dir(filepath.Dir(e.Path)), archive.Path) {
+		return nil
+	}
+	if !isMaildir(archive.Path) {
+		return fmt.Errorf("archive folder %s is not a Maildir", archive.Path)
+	}
+	subdir := filepath.Base(filepath.Dir(e.Path))
+	if subdir != "new" && subdir != "cur" {
+		subdir = "cur"
+	}
+	dst := uniquePath(filepath.Join(archive.Path, subdir, filepath.Base(e.Path)))
+	return moveFile(e.Path, dst)
+}
+
 func readSummary(path, folder string, unread bool) (Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {

@@ -197,3 +197,67 @@ func TestPrepareRootDoesNotTurnExistingContainerIntoMaildir(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverPlainArchiveFolder(t *testing.T) {
+	root := t.TempDir()
+	// Use a container-style Maildir layout like the one produced when a server
+	// or user creates INBOX and Archive as ordinary sibling folders.
+	inboxPath := filepath.Join(root, "INBOX")
+	archivePath := filepath.Join(root, "Archive")
+	if err := Ensure(inboxPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := Ensure(archivePath); err != nil {
+		t.Fatal(err)
+	}
+
+	folders, err := DiscoverFolders(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, ok := FindFolder(folders, "Archive")
+	if !ok {
+		t.Fatalf("plain Archive Maildir was not discovered: %#v", folders)
+	}
+	if !samePath(archive.Path, archivePath) {
+		t.Fatalf("Archive path = %s, want %s", archive.Path, archivePath)
+	}
+}
+
+func TestArchiveMovesToExistingFolderAndPreservesUnreadState(t *testing.T) {
+	root := t.TempDir()
+	if err := Ensure(root); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(root, ".Archive")
+	if err := Ensure(archivePath); err != nil {
+		t.Fatal(err)
+	}
+	msgPath := filepath.Join(root, "new", "archive-me")
+	if err := os.WriteFile(msgPath, []byte(testMessage), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := Scan(Folder{Name: "INBOX", Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || !entries[0].Unread {
+		t.Fatalf("expected one unread message: %#v", entries)
+	}
+
+	archive := Folder{Name: "Archive", Path: archivePath}
+	if err := Archive(entries[0], archive); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := Scan(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archived) != 1 || !archived[0].Unread {
+		t.Fatalf("archive should preserve unread state: %#v", archived)
+	}
+	if filepath.Base(filepath.Dir(archived[0].Path)) != "new" {
+		t.Fatalf("unread archived message should remain in new/: %s", archived[0].Path)
+	}
+}
