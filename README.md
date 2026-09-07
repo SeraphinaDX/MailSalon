@@ -5,6 +5,16 @@ It deliberately leaves network transport to external programs. MailSalon reads
 and modifies local Maildirs, while tools such as `mbsync`, `offlineimap`,
 `MailSalonSync`, `msmtp`, or custom wrapper scripts handle receiving and sending.
 
+## LLM Policy
+
+This project does not discriminate against LLM generated code.
+
+This project uses LLM generated code.
+
+Due to the nature of the code, the Go language was used to make it memory safe.
+
+Go code is perfect for LLM. There is only one way to write idiomatic Go code.
+
 ## Design
 
 The folder pane stays on the left. The message list and preview are stacked on
