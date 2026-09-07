@@ -71,6 +71,60 @@ func TestDiscoverScanMarkReadAndDelete(t *testing.T) {
 	}
 }
 
+func TestMarkReadHandlesUnreadMessageAlreadyInCur(t *testing.T) {
+	root := t.TempDir()
+	if err := Ensure(root); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "cur", "cur-unread:2,")
+	if err := os.WriteFile(path, []byte(testMessage), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := Scan(Folder{Name: "INBOX", Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || !entries[0].Unread {
+		t.Fatalf("expected unread cur message: %#v", entries)
+	}
+	if err := MarkRead(&entries[0]); err != nil {
+		t.Fatal(err)
+	}
+	if entries[0].Unread || !hasFlag(filepath.Base(entries[0].Path), 'S') {
+		t.Fatalf("message was not marked seen: %#v", entries[0])
+	}
+}
+
+func TestToggleReadUnread(t *testing.T) {
+	root := t.TempDir()
+	if err := Ensure(root); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "cur", "seen:2,S")
+	if err := os.WriteFile(path, []byte(testMessage), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := Scan(Folder{Name: "INBOX", Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Unread {
+		t.Fatalf("expected seen message: %#v", entries)
+	}
+	if err := ToggleRead(&entries[0]); err != nil {
+		t.Fatal(err)
+	}
+	if !entries[0].Unread || hasFlag(filepath.Base(entries[0].Path), 'S') {
+		t.Fatalf("message was not marked unread: %#v", entries[0])
+	}
+	if err := ToggleRead(&entries[0]); err != nil {
+		t.Fatal(err)
+	}
+	if entries[0].Unread || !hasFlag(filepath.Base(entries[0].Path), 'S') {
+		t.Fatalf("message was not marked seen again: %#v", entries[0])
+	}
+}
+
 func TestDiscoverFoldersDeduplicatesINBOXAndKeepsPopulatedFolder(t *testing.T) {
 	root := t.TempDir()
 	if err := Ensure(root); err != nil {

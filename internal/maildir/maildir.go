@@ -199,7 +199,7 @@ func Scan(folder Folder) ([]Entry, error) {
 }
 
 func MarkRead(e *Entry) error {
-	if e == nil || !e.Unread || filepath.Base(filepath.Dir(e.Path)) != "new" {
+	if e == nil || !e.Unread {
 		return nil
 	}
 	folderPath := filepath.Dir(filepath.Dir(e.Path))
@@ -211,6 +211,41 @@ func MarkRead(e *Entry) error {
 	e.Path = dst
 	e.Unread = false
 	return nil
+}
+
+// MarkUnread removes the Maildir Seen (S) flag while keeping the message in
+// cur/. Maildir clients commonly represent an explicitly unread message this
+// way, and sync tools can propagate the flag change from the filename.
+func MarkUnread(e *Entry) error {
+	if e == nil || e.Unread {
+		return nil
+	}
+	folderPath := filepath.Dir(filepath.Dir(e.Path))
+	name := removeFlag(filepath.Base(e.Path), 'S')
+	dst := uniquePath(filepath.Join(folderPath, "cur", name))
+	if samePath(e.Path, dst) {
+		e.Unread = true
+		return nil
+	}
+	if err := moveFile(e.Path, dst); err != nil {
+		return err
+	}
+	e.Path = dst
+	e.Unread = true
+	return nil
+}
+
+// ToggleRead switches between Seen and unread state using Maildir filename
+// flags. This is useful when a remote sync tool has placed unread messages in
+// cur/ rather than new/.
+func ToggleRead(e *Entry) error {
+	if e == nil {
+		return nil
+	}
+	if e.Unread {
+		return MarkRead(e)
+	}
+	return MarkUnread(e)
 }
 
 func Delete(e Entry, trash Folder) error {
@@ -323,6 +358,22 @@ func addFlag(name string, flag byte) string {
 	flags = append(flags, flag)
 	sort.Slice(flags, func(i, j int) bool { return flags[i] < flags[j] })
 	return base + string(flags)
+}
+
+func removeFlag(name string, flag byte) string {
+	idx := strings.LastIndex(name, ":2,")
+	if idx < 0 {
+		return name
+	}
+	base := name[:idx+3]
+	flags := []byte(name[idx+3:])
+	filtered := flags[:0]
+	for _, f := range flags {
+		if f != flag {
+			filtered = append(filtered, f)
+		}
+	}
+	return base + string(filtered)
 }
 
 func uniquePath(path string) string {

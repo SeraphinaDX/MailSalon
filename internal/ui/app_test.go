@@ -1,10 +1,14 @@
 package uiapp
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/config"
+	"git.cerberusgames.ca/Starstreak/MailSalon/internal/maildir"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/mimeutil"
 )
 
@@ -56,9 +60,64 @@ func TestMainLegendShowsComposeAndUpdate(t *testing.T) {
 		status: "Ready",
 	}
 	legend := a.footerText()
-	for _, want := range []string{"c Compose", "u Update mail"} {
+	for _, want := range []string{"c Compose", "u Update mail", "m Read/unread", "/ Search"} {
 		if !strings.Contains(legend, want) {
 			t.Fatalf("main legend missing %q: %q", want, legend)
 		}
+	}
+}
+
+func TestComposeInitialFocus(t *testing.T) {
+	a := &App{
+		cfg: config.Config{Accounts: []config.Account{{Name: "test", From: "test@example.com"}}},
+	}
+	a.startCompose(nil, false)
+	if a.compose == nil || a.compose.field != composeTo {
+		t.Fatalf("new compose field = %v, want To", a.compose.field)
+	}
+
+	source := &mimeutil.ParsedMessage{
+		From:    "Sender <sender@example.com>",
+		Subject: "Hello",
+		Body:    "Original body",
+	}
+	a.startCompose(source, false)
+	if a.compose == nil || a.compose.field != composeBody {
+		t.Fatalf("reply compose field = %v, want Body", a.compose.field)
+	}
+
+	a.startCompose(source, true)
+	if a.compose == nil || a.compose.field != composeTo {
+		t.Fatalf("forward compose field = %v, want To", a.compose.field)
+	}
+}
+
+func TestMessageMatchesSearchIncludesBodyAndHeaders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "message.eml")
+	raw := "From: Alice <alice@example.com>\r\n" +
+		"To: Britney <britney@example.com>\r\n" +
+		"Cc: Team <team@example.com>\r\n" +
+		"Subject: Weekend plans\r\n" +
+		"Date: Mon, 07 Sep 2026 10:00:00 -0400\r\n" +
+		"Message-ID: <search@example.com>\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n\r\n" +
+		"The secret search phrase is lavender mailbox.\r\n"
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entry := maildir.Entry{
+		Path:      path,
+		From:      "Alice",
+		Subject:   "Weekend plans",
+		Date:      time.Date(2026, 9, 7, 10, 0, 0, 0, time.FixedZone("EDT", -4*60*60)),
+		MessageID: "<search@example.com>",
+	}
+	for _, query := range []string{"ALICE", "weekend", "britney@example.com", "lavender mailbox"} {
+		if !messageMatchesSearch(entry, query) {
+			t.Fatalf("search did not match %q", query)
+		}
+	}
+	if messageMatchesSearch(entry, "definitely absent") {
+		t.Fatal("search matched absent text")
 	}
 }

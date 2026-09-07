@@ -81,9 +81,10 @@ type App struct {
 	theme   resolvedTheme
 	account int
 
-	folders  []maildir.Folder
-	messages []maildir.Entry
-	parsed   *mimeutil.ParsedMessage
+	folders     []maildir.Folder
+	allMessages []maildir.Entry
+	messages    []maildir.Entry
+	parsed      *mimeutil.ParsedMessage
 
 	selectedFolder  int
 	selectedMessage int
@@ -93,13 +94,16 @@ type App struct {
 	focus           focus
 	status          string
 	deleteArmed     bool
+	searchActive    bool
+	searchQuery     string
 
-	accountBar *widgets.Paragraph
-	updateBar  *widgets.Paragraph
-	folderList *widgets.List
-	messageTbl *widgets.Table
-	preview    *widgets.Paragraph
-	footer     *widgets.Paragraph
+	accountBar   *widgets.Paragraph
+	updateBar    *widgets.Paragraph
+	folderList   *widgets.List
+	messageTbl   *widgets.Table
+	preview      *widgets.Paragraph
+	footer       *widgets.Paragraph
+	searchPrompt *widgets.Input
 
 	compose *composeState
 }
@@ -154,13 +158,18 @@ func New(cfg config.Config) (*App, error) {
 
 	a.preview = widgets.NewParagraph()
 	a.preview.Title = "Message"
-	a.preview.TitleBottom = "Wheel/j/k Scroll  PgUp/PgDn Page  r Reply  f Fwd  a Save  d Delete"
+	a.preview.TitleBottom = "j/k Scroll  PgUp/PgDn Page  r Reply  f Fwd  m Read/Unread  a Save  d Delete"
 	a.preview.WrapText = false
 	a.preview.BorderRounded = true
 
 	a.footer = widgets.NewParagraph()
 	a.footer.Border = false
 	a.footer.WrapText = false
+
+	a.searchPrompt = widgets.NewInput()
+	a.searchPrompt.Title = "Search current folder"
+	a.searchPrompt.TitleBottom = "Enter apply  Esc cancel  Empty search clears"
+	a.searchPrompt.BorderRounded = true
 
 	a.applyStyles()
 	if err := a.refreshFolders(); err != nil {
@@ -184,6 +193,13 @@ func (a *App) Run() error {
 		}
 		if a.compose != nil {
 			if a.handleComposeEvent(e) {
+				return nil
+			}
+			a.render()
+			continue
+		}
+		if a.searchActive {
+			if a.handleSearchEvent(e) {
 				return nil
 			}
 			a.render()
@@ -219,6 +235,7 @@ func (a *App) applyStyles() {
 		&a.messageTbl.Block,
 		&a.preview.Block,
 		&a.footer.Block,
+		&a.searchPrompt.Block,
 	} {
 		block.BackgroundColor = a.theme.background
 		block.BorderStyle = border
@@ -240,6 +257,8 @@ func (a *App) applyStyles() {
 
 	a.preview.TextStyle = text
 	a.footer.TextStyle = ui.NewStyle(a.theme.status, a.theme.background)
+	a.searchPrompt.TextStyle = text
+	a.searchPrompt.CursorStyle = ui.NewStyle(a.theme.cursorFG, a.theme.cursorBG)
 }
 
 func (a *App) refreshFolders() error {
@@ -249,8 +268,10 @@ func (a *App) refreshFolders() error {
 	}
 	a.folders = folders
 	if len(a.folders) == 0 {
+		a.allMessages = nil
 		a.messages = nil
 		a.parsed = nil
+		a.searchQuery = ""
 		return nil
 	}
 	if a.selectedFolder >= len(a.folders) {
@@ -271,11 +292,13 @@ func (a *App) loadFolder(index int) error {
 		return err
 	}
 	a.selectedFolder = index
-	a.messages = entries
+	a.allMessages = append([]maildir.Entry(nil), entries...)
+	a.messages = append([]maildir.Entry(nil), entries...)
 	a.selectedMessage = 0
 	a.messageOffset = 0
 	a.previewScroll = 0
 	a.parsed = nil
+	a.searchQuery = ""
 	if len(a.messages) > 0 {
 		_ = a.openMessage(0)
 	}
@@ -288,6 +311,7 @@ func (a *App) openMessage(index int) error {
 		return nil
 	}
 	a.selectedMessage = index
+	oldPath := a.messages[index].Path
 	p, err := mimeutil.ParseFile(a.messages[index].Path)
 	if err != nil {
 		return err
@@ -295,6 +319,7 @@ func (a *App) openMessage(index int) error {
 	if err := maildir.MarkRead(&a.messages[index]); err != nil {
 		return err
 	}
+	a.syncMasterEntry(oldPath, a.messages[index])
 	a.parsed = p
 	a.previewScroll = 0
 	return nil
@@ -350,6 +375,10 @@ func (a *App) handleKey(id string) bool {
 		a.switchAccount(1)
 	case "c":
 		a.startCompose(nil, false)
+	case "/":
+		a.startSearch()
+	case "m":
+		a.toggleSelectedRead()
 	case "r":
 		if a.parsed == nil {
 			a.status = "No message selected"
@@ -382,6 +411,120 @@ func (a *App) handleKey(id string) bool {
 		}
 	}
 	return false
+}
+
+func (a *App) startSearch() {
+	a.searchActive = true
+	a.searchPrompt.Text = a.searchQuery
+	a.searchPrompt.Cursor = utf8.RuneCountInString(a.searchPrompt.Text)
+	a.status = "Search current folder"
+}
+
+func (a *App) handleSearchEvent(e ui.Event) bool {
+	if e.Type != ui.KeyboardEvent {
+		return false
+	}
+	switch e.ID {
+	case "<C-c>":
+		return true
+	case "<Escape>":
+		a.searchActive = false
+		a.status = "Search cancelled"
+	case "<Enter>":
+		query := strings.TrimSpace(a.searchPrompt.Text)
+		a.searchActive = false
+		a.applySearch(query)
+	default:
+		a.editInput(a.searchPrompt, e.ID)
+	}
+	return false
+}
+
+func (a *App) applySearch(query string) {
+	a.searchQuery = strings.TrimSpace(query)
+	a.selectedMessage = 0
+	a.messageOffset = 0
+	a.previewScroll = 0
+	a.parsed = nil
+	if a.searchQuery == "" {
+		a.messages = append([]maildir.Entry(nil), a.allMessages...)
+		a.status = "Search cleared"
+	} else {
+		matches := make([]maildir.Entry, 0)
+		for _, entry := range a.allMessages {
+			if messageMatchesSearch(entry, a.searchQuery) {
+				matches = append(matches, entry)
+			}
+		}
+		a.messages = matches
+		a.status = fmt.Sprintf("Search %q: %d match(es)", a.searchQuery, len(matches))
+	}
+	if len(a.messages) > 0 {
+		if err := a.openMessage(0); err != nil {
+			a.setError(err)
+		}
+	}
+}
+
+func messageMatchesSearch(entry maildir.Entry, query string) bool {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	if needle == "" {
+		return true
+	}
+	quick := strings.ToLower(strings.Join([]string{
+		entry.From,
+		entry.Subject,
+		entry.MessageID,
+		entry.Date.Format(time.RFC1123Z),
+	}, "\n"))
+	if strings.Contains(quick, needle) {
+		return true
+	}
+	p, err := mimeutil.ParseFile(entry.Path)
+	if err != nil {
+		return false
+	}
+	full := strings.ToLower(strings.Join([]string{
+		p.From, p.To, p.Cc, p.Subject, p.Date, p.MessageID, p.Body,
+	}, "\n"))
+	return strings.Contains(full, needle)
+}
+
+func (a *App) toggleSelectedRead() {
+	if len(a.messages) == 0 || a.selectedMessage < 0 || a.selectedMessage >= len(a.messages) {
+		a.status = "No message selected"
+		return
+	}
+	oldPath := a.messages[a.selectedMessage].Path
+	wasUnread := a.messages[a.selectedMessage].Unread
+	if err := maildir.ToggleRead(&a.messages[a.selectedMessage]); err != nil {
+		a.setError(err)
+		return
+	}
+	a.syncMasterEntry(oldPath, a.messages[a.selectedMessage])
+	if wasUnread {
+		a.status = "Message marked read"
+	} else {
+		a.status = "Message marked unread"
+	}
+}
+
+func (a *App) syncMasterEntry(oldPath string, updated maildir.Entry) {
+	for i := range a.allMessages {
+		if a.allMessages[i].Path == oldPath {
+			a.allMessages[i] = updated
+			return
+		}
+	}
+	if updated.MessageID == "" {
+		return
+	}
+	for i := range a.allMessages {
+		if a.allMessages[i].MessageID == updated.MessageID {
+			a.allMessages[i] = updated
+			return
+		}
+	}
 }
 
 func (a *App) moveSelection(delta int) {
@@ -630,7 +773,6 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 	c.body.ShowCursor = true
 	c.attachPrompt.Title = "Attach file path"
 	a.styleComposeWidgets(c)
-	c.field = composeFrom
 
 	if source != nil && forward {
 		c.subject.Text = addSubjectPrefix(source.Subject, "Fwd:")
@@ -642,6 +784,13 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 		c.inReplyTo = source.MessageID
 		c.references = strings.TrimSpace(strings.TrimSpace(source.References) + " " + strings.TrimSpace(source.MessageID))
 		c.body.Text = quoteBody(source)
+	}
+	if c.isReply {
+		c.field = composeBody
+	} else {
+		// New messages and forwards need a recipient first, so put the cursor
+		// directly in To rather than on the account selector.
+		c.field = composeTo
 	}
 	c.to.Cursor = utf8.RuneCountInString(c.to.Text)
 	c.subject.Cursor = utf8.RuneCountInString(c.subject.Text)
@@ -939,7 +1088,15 @@ func (a *App) render() {
 	a.footer.Text = a.footerText()
 
 	a.updateFocusStyles()
-	ui.Render(a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer)
+	items := []ui.Drawable{a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer}
+	if a.searchActive {
+		promptW := clamp(w-12, 40, 90)
+		x := (w - promptW) / 2
+		y := max(1, h/2-2)
+		a.searchPrompt.SetRect(x, y, x+promptW, y+3)
+		items = append(items, a.searchPrompt)
+	}
+	ui.Render(items...)
 }
 
 func (a *App) populateAccountBar() {
@@ -984,6 +1141,10 @@ func (a *App) populateFolderList() {
 }
 
 func (a *App) populateMessageTable() {
+	a.messageTbl.Title = "Messages"
+	if a.searchQuery != "" {
+		a.messageTbl.Title = safeUI(fmt.Sprintf("Messages — search: %s", a.searchQuery))
+	}
 	visible := max(1, a.messageTbl.Inner.Dy()-1)
 	a.messageOffset = keepVisible(a.selectedMessage, a.messageOffset, visible, len(a.messages))
 	end := min(len(a.messages), a.messageOffset+visible)
@@ -1075,8 +1236,8 @@ func (a *App) updateFocusStyles() {
 func (a *App) footerText() string {
 	account := a.currentAccount()
 	line1 := fmt.Sprintf(" [%s] %s", account.Name, a.status)
-	line2 := " c Compose  u Update mail  r Reply  f Forward  d Delete  a Save attachments"
-	line3 := " A Switch account  Tab Focus  j/k Move  Enter Open  PgUp/PgDn Page  R Refresh  q Quit"
+	line2 := " c Compose  u Update mail  r Reply  f Forward  m Read/unread  / Search"
+	line3 := " d Delete  a Save attachments  A Switch account  Tab Focus  j/k Move  Enter Open  R Refresh  q Quit"
 	return safeUI(line1 + "\n" + line2 + "\n" + line3)
 }
 

@@ -28,11 +28,11 @@ account selector, or use the mouse wheel over it to switch accounts.
 │ Archive              ││                                                    │
 │ Drafts               ││ Message body...                                    │
 │ Sent                 ││                                                    │
-│ Trash                │├─ Wheel/j/k Scroll  r Reply  f Fwd  a Save  d Delete ┤
+│ Trash                │├─ j/k Scroll  r Reply  f Fwd  m Read/Unread  a Save ┤
 └──────────────────────┘└────────────────────────────────────────────────────┘
  [cerberus] Ready
- c Compose  u Update mail  r Reply  f Forward  d Delete  a Save attachments
- A Switch account  Tab Focus  j/k Move  Enter Open  PgUp/PgDn Page  R Refresh  q Quit
+ c Compose  u Update mail  r Reply  f Forward  m Read/unread  / Search
+ d Delete  a Save attachments  A Switch account  Tab Focus  j/k Move  Enter Open  R Refresh  q Quit
 ```
 
 ## Features
@@ -45,6 +45,9 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Wide From / Subject / Date message table.
 - Plain-text message preview. HTML-only messages are converted to readable terminal text, preserving paragraphs, lists, and useful link destinations while discarding scripts/styles.
 - Contextual keybind hints are displayed directly on the message-preview pane.
+- Manual read/unread toggle using the Maildir `S` (Seen) flag.
+- Case-insensitive search within the current folder across sender, recipients,
+  subject, date, Message-ID, and message body.
 - New message composition with separate To, Cc, and Bcc fields. Each field accepts multiple comma-separated RFC-style addresses.
 - Reply with `In-Reply-To`, `References`, and quoted original text.
 - Selectable **Reply from** account in the compose UI.
@@ -289,6 +292,8 @@ different account's transport configuration.
 | `c` | Compose a new message |
 | `r` | Reply |
 | `f` | Forward |
+| `m` | Toggle the selected message between read and unread |
+| `/` | Search the current folder; submit an empty search to clear the filter |
 | `d`, then `d` | Delete / confirm delete |
 | `a` | Save all attachments from the selected message |
 | `u` | Update mail: run the active account's receive command and rescan |
@@ -302,6 +307,9 @@ The first row is `From` for new messages and forwards, or `Reply from` for
 replies. It displays the account name, email identity, and configured signature
 file. A four-line legend remains visible at the bottom of the screen and labels
 the current mode as `Compose`, `Reply`, or `Forward`.
+
+New messages and forwards initially focus the `To` field. Replies initially
+focus the message body so you can start typing above the quoted original text.
 
 `To`, `Cc`, and `Bcc` each accept multiple comma-separated addresses, including
 display-name forms such as `Alice <alice@example.com>, Bob <bob@example.com>`.
@@ -336,7 +344,15 @@ and identifies the bad field if parsing fails.
 
 Each account can point either at an INBOX Maildir itself or at a Maildir container that contains an `INBOX` child. MailSalon discovers Maildir++ folders such as `.Trash` and ordinary nested Maildirs without manufacturing a duplicate INBOX.
 Messages in `new` or without the `S` flag are displayed as unread. Opening a
-message moves it from `new` to `cur` and adds the `S` (seen) flag.
+message moves it from `new` to `cur` when necessary and adds the `S` (seen)
+flag. This also works for unread messages that a sync tool has already placed
+in `cur`. Press `m` to manually remove/add the Seen flag and mark a message
+unread/read.
+
+Press `/` to search the currently open folder. Search is case-insensitive and
+checks From, To, Cc, Subject, Date, Message-ID, and the rendered plain-text
+body. Press Enter to apply the filter, Escape to cancel the prompt, or submit an
+empty search to restore the full folder.
 
 Deletion uses the active account's configured Trash Maildir. If that folder is
 not present, MailSalon refuses to delete instead of guessing a path. Deleting a
