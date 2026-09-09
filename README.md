@@ -93,21 +93,6 @@ account selector, or use the mouse wheel over it to switch accounts.
   own compatible command.
 - Optional `gpg`/GnuPG installation when OpenPGP support is enabled.
 
-## Version
-
-MailSalon 0.3.0 adds Archive support plus TOML-configurable keybindings whose on-screen legends update automatically. OpenPGP/GnuPG support from 0.2.0 remains available. Check the installed version with either:
-
-```sh
-MailSalon -version
-MailSalon --version
-```
-
-Both print:
-
-```text
-MailSalon 0.3.0
-```
-
 ## Build
 
 ```sh
