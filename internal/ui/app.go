@@ -1021,6 +1021,25 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 		a.cycleComposePGPMode()
 		return false
 	}
+
+	// The body is a multiline editor. A literal Tab must stay in the body;
+	// otherwise terminal paste (Shift+Insert, middle-click, etc.) can turn a
+	// pasted tab into the global NextField binding and spill the remainder of
+	// the paste into From/To/Cc/Bcc/Subject. Shift+Tab still leaves the body,
+	// and a custom non-Tab NextField binding continues to work normally.
+	if c.field == composeBody {
+		if bindingMatches(e.ID, keys.PreviousField) || (bindingEventID(keys.PreviousField) == "<Backtab>" && e.ID == "<S-Tab>") {
+			c.field = (c.field + 5) % 6
+			return false
+		}
+		if bindingMatches(e.ID, keys.NextField) && e.ID != "<Tab>" {
+			c.field = (c.field + 1) % 6
+			return false
+		}
+		a.editTextArea(c.body, e.ID)
+		return false
+	}
+
 	if bindingMatches(e.ID, keys.NextField) {
 		c.field = (c.field + 1) % 6
 		return false
@@ -1039,11 +1058,7 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 		}
 		return false
 	}
-	if c.field == composeBody {
-		a.editTextArea(c.body, e.ID)
-	} else {
-		a.editInput(a.activeInput(), e.ID)
-	}
+	a.editInput(a.activeInput(), e.ID)
 	return false
 }
 
@@ -1171,6 +1186,13 @@ func (a *App) editTextArea(ta *widgets.TextArea, id string) {
 		ta.DeleteRune()
 	case "<Enter>":
 		ta.InsertNewline()
+	case "<Tab>":
+		// gotui currently delivers terminal paste as ordinary key events rather
+		// than a distinct paste event. Keep pasted tabs useful and harmless by
+		// representing them as four spaces in the message body.
+		for i := 0; i < 4; i++ {
+			ta.InsertRune(' ')
+		}
 	case "<Left>":
 		ta.MoveCursor(-1, 0)
 	case "<Right>":
@@ -1552,7 +1574,7 @@ func (a *App) renderCompose(w, h int) {
 		fromHint = fmt.Sprintf("%s: %s/%s switch account", fromLabel, keyLabel(keys.FocusLeft), keyLabel(keys.FocusRight))
 	}
 	legend := fmt.Sprintf(
-		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline\n %s  Backspace/Delete Edit",
+		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline  Tab indent  Shift+Tab previous field\n %s  Backspace/Delete Edit",
 		composeModeName(c), a.status, composePGPModeName(c, a.composeAccount()),
 		keyLabel(keys.Send), keyLabel(keys.Attach), keyLabel(keys.PGPMode), keyLabel(keys.Cancel),
 		keyLabel(keys.NextField), keyLabel(keys.PreviousField), fromHint,
