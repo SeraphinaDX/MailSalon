@@ -1,4 +1,4 @@
-# MailSalon 0.3.2
+# MailSalon 0.3.3
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
