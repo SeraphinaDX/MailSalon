@@ -1951,7 +1951,7 @@ func safeUI(s string) string {
 }
 
 func printableRune(id string) (rune, bool) {
-	if strings.HasPrefix(id, "<") || utf8.RuneCountInString(id) != 1 {
+	if utf8.RuneCountInString(id) != 1 {
 		return 0, false
 	}
 	r, _ := utf8.DecodeRuneInString(id)
