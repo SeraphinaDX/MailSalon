@@ -1193,6 +1193,7 @@ func (a *App) editTextArea(ta *widgets.TextArea, id string) {
 		for i := 0; i < 4; i++ {
 			ta.InsertRune(' ')
 		}
+		wrapComposeBodyLine(ta)
 	case "<Left>":
 		ta.MoveCursor(-1, 0)
 	case "<Right>":
@@ -1204,6 +1205,7 @@ func (a *App) editTextArea(ta *widgets.TextArea, id string) {
 	default:
 		if r, ok := printableRune(id); ok {
 			ta.InsertRune(r)
+			wrapComposeBodyLine(ta)
 		}
 	}
 }
