@@ -55,3 +55,28 @@ func TestComposeBodyShiftTabStillLeavesBody(t *testing.T) {
 		t.Fatalf("compose field = %v, want Subject", a.compose.field)
 	}
 }
+
+func TestComposeAcceptsAngleBrackets(t *testing.T) {
+	a := &App{
+		cfg: config.Config{
+			Accounts: []config.Account{{Name: "test", From: "test@example.com"}},
+		},
+	}
+	a.startCompose(nil, false)
+
+	a.compose.field = composeSubject
+	for _, id := range []string{"a", "<", "b", ">", "c"} {
+		a.handleComposeEvent(ui.Event{Type: ui.KeyboardEvent, ID: id})
+	}
+	if got, want := a.compose.subject.Text, "a<b>c"; got != want {
+		t.Fatalf("subject = %q, want %q", got, want)
+	}
+
+	a.compose.field = composeBody
+	for _, id := range []string{"x", "<", "y", ">", "z"} {
+		a.handleComposeEvent(ui.Event{Type: ui.KeyboardEvent, ID: id})
+	}
+	if got, want := a.compose.body.Text, "x<y>z"; got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}
