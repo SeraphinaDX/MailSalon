@@ -13,11 +13,15 @@ import (
 	"time"
 )
 
+// Folder is one logical Maildir folder as shown in the UI. Path points to the
+// physical directory that contains its cur/, new/, and tmp/ subdirectories.
 type Folder struct {
 	Name string
 	Path string
 }
 
+// Entry is the lightweight message metadata used by the message list. The full
+// MIME message is parsed only when the user opens it, keeping folder scans fast.
 type Entry struct {
 	Path      string
 	Folder    string
@@ -50,6 +54,9 @@ func PrepareRoot(root string) error {
 	return nil
 }
 
+// Ensure creates the three directories required by the Maildir format. It is
+// safe to call for an existing Maildir because MkdirAll leaves existing paths
+// in place.
 func Ensure(root string) error {
 	for _, d := range []string{"cur", "new", "tmp"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o700); err != nil {
@@ -59,6 +66,10 @@ func Ensure(root string) error {
 	return nil
 }
 
+// DiscoverFolders walks an account root and returns each valid Maildir exactly
+// once. It understands both a root-as-INBOX layout and container layouts with
+// an explicit INBOX child, and it also converts Maildir++ dot names to friendly
+// slash-separated display names.
 func DiscoverFolders(root string) ([]Folder, error) {
 	root = filepath.Clean(root)
 	if _, err := os.Stat(root); err != nil {
@@ -110,6 +121,8 @@ func DiscoverFolders(root string) ([]Folder, error) {
 		return nil, err
 	}
 
+	// INBOX is always first because it is the primary folder. Remaining names
+	// are sorted case-insensitively for a stable, predictable sidebar order.
 	sort.Slice(folders, func(i, j int) bool {
 		iInbox := strings.EqualFold(folders[i].Name, "INBOX")
 		jInbox := strings.EqualFold(folders[j].Name, "INBOX")
@@ -159,6 +172,8 @@ func maildirMessageCount(path string) int {
 	return count
 }
 
+// FindFolder resolves a display name case-insensitively. Folder names come from
+// local discovery, so this helper avoids duplicating case rules at call sites.
 func FindFolder(folders []Folder, name string) (Folder, bool) {
 	for _, f := range folders {
 		if strings.EqualFold(f.Name, name) {
@@ -168,6 +183,9 @@ func FindFolder(folders []Folder, name string) (Folder, bool) {
 	return Folder{}, false
 }
 
+// Scan reads lightweight headers from new/ and cur/ and returns newest messages
+// first. Malformed individual messages are skipped so one bad file does not
+// make an entire folder unusable.
 func Scan(folder Folder) ([]Entry, error) {
 	var out []Entry
 	for _, sub := range []string{"new", "cur"} {
@@ -198,6 +216,9 @@ func Scan(folder Folder) ([]Entry, error) {
 	return out, nil
 }
 
+// MarkRead gives a message the Maildir Seen (S) flag and moves it to cur/.
+// Renaming the file is the Maildir-native state change that synchronization
+// tools can later propagate to the remote mailbox.
 func MarkRead(e *Entry) error {
 	if e == nil || !e.Unread {
 		return nil
@@ -248,6 +269,9 @@ func ToggleRead(e *Entry) error {
 	return MarkUnread(e)
 }
 
+// Delete implements MailSalon's two-stage local delete behavior. Messages are
+// moved to the configured Trash Maildir; deleting an item already in Trash
+// removes the file permanently.
 func Delete(e Entry, trash Folder) error {
 	if samePath(filepath.Dir(filepath.Dir(e.Path)), trash.Path) {
 		return os.Remove(e.Path)
@@ -282,6 +306,8 @@ func Archive(e Entry, archive Folder) error {
 	return moveFile(e.Path, dst)
 }
 
+// readSummary parses only the headers required by the message list. If Date is
+// absent or invalid, filesystem modification time provides a stable fallback.
 func readSummary(path, folder string, unread bool) (Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -395,6 +421,8 @@ func removeFlag(name string, flag byte) string {
 	return base + string(filtered)
 }
 
+// uniquePath avoids overwriting an existing Maildir file. Collisions are rare
+// but possible when moving/copying messages produced by different tools.
 func uniquePath(path string) string {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return path
@@ -407,6 +435,9 @@ func uniquePath(path string) string {
 	}
 }
 
+// moveFile prefers an atomic rename. The copy+sync+remove fallback handles
+// moves across filesystems while avoiding a partially written destination if
+// copying fails.
 func moveFile(src, dst string) error {
 	if err := os.Rename(src, dst); err == nil {
 		return nil
