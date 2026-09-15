@@ -12,6 +12,8 @@ import (
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/version"
 )
 
+// main is intentionally small: configuration and UI behavior live in internal
+// packages so command-line startup remains easy to follow and test independently.
 func main() {
 	configPath := flag.String("config", config.DefaultPath(), "path to MailSalon configuration")
 	noStartupSync := flag.Bool("no-startup-sync", false, "disable startup receive command for this run")
@@ -23,6 +25,9 @@ func main() {
 		return
 	}
 
+	// Load applies defaults and validates the TOML before any terminal state is
+	// changed. A command-line startup override is applied afterward so it affects
+	// only this invocation and never rewrites the user's configuration file.
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "MailSalon:", err)
@@ -32,6 +37,8 @@ func main() {
 		cfg.StartupSync = false
 	}
 
+	// gotui owns the terminal while MailSalon is running. Always Close it on a
+	// normal return so terminal modes/cursor state are restored for the shell.
 	if err := ui.Init(); err != nil {
 		fmt.Fprintln(os.Stderr, "MailSalon: initialize terminal:", err)
 		os.Exit(1)
