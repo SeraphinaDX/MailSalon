@@ -1504,7 +1504,8 @@ func (a *App) populateFolderList() {
 	a.folderList.SelectedRow = a.selectedFolder - a.folderOffset
 	if len(a.folders) == 0 {
 		a.folderList.Rows = []string{"(no folders)"}
-		a.folderList.SelectedRow = -1
+		// List does not support a negative selection, even for placeholders.
+		a.folderList.SelectedRow = 0
 	}
 }
 
@@ -1592,6 +1593,11 @@ func (a *App) updateFocusStyles() {
 	active := ui.NewStyle(a.theme.activeBorder, a.theme.background)
 	inactive := ui.NewStyle(a.theme.border, a.theme.background)
 	a.folderList.BorderStyle = inactive
+	a.folderList.SelectedStyle = ui.NewStyle(a.theme.selectedFG, a.theme.selectedBG)
+	if (a.view == 0 && len(a.folders) == 0) || (a.view != 0 && len(a.pimCollections) == 0) {
+		// Keep the valid placeholder row visually unselected.
+		a.folderList.SelectedStyle = a.folderList.TextStyle
+	}
 	a.messageTbl.BorderStyle = inactive
 	a.preview.BorderStyle = inactive
 	switch a.focus {

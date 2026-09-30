@@ -234,7 +234,9 @@ func (a *App) renderPIM(w, h int) {
 	a.folderList.SelectedRow = a.pimCollection - a.folderOffset
 	if len(a.pimCollections) == 0 {
 		a.folderList.Rows = []string{"(no collections)"}
-		a.folderList.SelectedRow = -1
+		// gotui List treats selection as its scroll anchor, so -1 is unsafe
+		// even when a placeholder is the only row.
+		a.folderList.SelectedRow = 0
 	}
 	visible := max(1, a.messageTbl.Inner.Dy()-1)
 	a.pimOffset = keepVisible(a.pimSelected, a.pimOffset, visible, len(a.pimItems))
@@ -258,6 +260,9 @@ func (a *App) renderPIM(w, h int) {
 	a.messageTbl.ColumnWidths = []int{max(12, (w-left)/3), max(12, (w-left)/3), max(8, (w-left)/3-4)}
 	a.messageTbl.SelectedRow = a.pimSelected - a.pimOffset + 1
 	a.preview.Text = "No items yet. Sync first, or press n to create one."
+	if len(a.pimCollections) == 0 {
+		a.preview.Text = "No collections configured for this view.\nAdd an address book or calendar in config.toml; see docs/contacts-calendar.md."
+	}
 	if len(a.pimItems) > 0 {
 		i := a.pimItems[a.pimSelected]
 		text := fmt.Sprintf("%s\n", i.Title)
