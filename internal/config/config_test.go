@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadMultipleAccountsTOML(t *testing.T) {
@@ -36,6 +37,7 @@ send = "msmtp -a work -t"
 [options]
 default_account = "work"
 startup_sync = true
+sync_interval = "2m30s"
 
 [keybindings]
 compose = "n"
@@ -73,12 +75,64 @@ send = "Ctrl+X"
 	if !cfg.StartupSync {
 		t.Fatal("startup_sync was not loaded")
 	}
+	if cfg.SyncInterval != 2*time.Minute+30*time.Second {
+		t.Fatalf("sync_interval = %s", cfg.SyncInterval)
+	}
 	if !strings.HasSuffix(cfg.Accounts[1].Maildir, filepath.Join("Maildir-work")) {
 		t.Fatalf("maildir was not expanded: %q", cfg.Accounts[1].Maildir)
 	}
 	s, err := ReadSignature(cfg.Accounts[0])
 	if err != nil || s != "Example signature" {
 		t.Fatalf("signature = %q, err=%v", s, err)
+	}
+}
+
+func TestDefaultSyncInterval(t *testing.T) {
+	if got := Default().SyncInterval; got != 5*time.Minute {
+		t.Fatalf("default sync interval = %s, want 5m", got)
+	}
+}
+
+func TestLoadSyncIntervalZeroDisablesPeriodicSync(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := `
+[[accounts]]
+name = "personal"
+maildir = "~/Maildir"
+
+[options]
+sync_interval = "0"
+`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SyncInterval != 0 {
+		t.Fatalf("sync interval = %s, want disabled", cfg.SyncInterval)
+	}
+}
+
+func TestLoadRejectsInvalidSyncInterval(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	data := `
+[[accounts]]
+name = "personal"
+maildir = "~/Maildir"
+
+[options]
+sync_interval = "often"
+`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "options.sync_interval") {
+		t.Fatalf("expected sync interval error, got %v", err)
 	}
 }
 
