@@ -1,5 +1,7 @@
 # Contacts and calendars
 
+[Documentation index](README.md) · [Quickstart](quickstart.md)
+
 The highlighted view bar at the top shows **1 Mail**, **2 Contacts**, and
 **3 Calendar**. Press a shortcut or click a tab to switch views. The selected
 account stays the same when you switch views.
@@ -130,7 +132,7 @@ sync restores locally deleted tracked files. Invalid source edits are rejected
 for malformed containers/JSON or missing UID; the server performs detailed
 protocol validation when uploading.
 
-## Calendar view in this increment
+## Calendar view
 
 The calendar mode is a sortable list of stored items and a detail/source preview,
 not yet a month/week grid or an occurrence-expanding agenda. Recurring resources
@@ -139,6 +141,6 @@ shows the series' stored start, not every occurrence. Native time zone and
 all-day information is shown rather than silently interpreted as local time.
 Existing CalDAV VTODO files are readable in the calendar view, but there is no
 task creation form. Reminder notifications, invitation handling/RSVP, free/busy,
-contact autocomplete in arbitrary recipient fields, and structured editing of
-all existing properties remain future increments.
+and structured editing of all existing properties are not yet available.
+To/Cc/Bcc contact autocomplete is available as described above.
 
