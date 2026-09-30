@@ -1,4 +1,4 @@
-# MailSalon 0.5.1
+# MailSalon 0.6.0
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
@@ -69,6 +69,8 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Case-insensitive search within the current folder across sender, recipients,
   subject, date, Message-ID, and message body.
 - New message composition with separate To, Cc, and Bcc fields. Each field accepts multiple comma-separated RFC-style addresses.
+- Contact autocomplete in To/Cc/Bcc, scoped to the compose account and shared address books, including secondary email addresses.
+- Save missing reply senders as contacts automatically (enabled by default, configurable in TOML).
 - Text selection in every editable field with Shift+arrows, mouse dragging, and Alt+A select all. Typing/pasting replaces the selection; Backspace/Delete removes it.
 - Reply with `In-Reply-To`, `References`, and quoted original text.
 - Selectable **Reply from** account in the compose UI.
@@ -265,6 +267,34 @@ previous_field = "Shift+Tab"
 ```
 
 Duplicate bindings within the same UI mode are rejected at startup instead of making one action silently unreachable. Mouse controls are unchanged by keyboard remapping.
+
+### Contact autocomplete and saving reply senders
+
+Type a name or part of an email address in To, Cc, or Bcc to see matching local
+contacts. Use Up/Down to choose, then Enter, Tab, or a mouse click to insert the
+address. Tab accepts a suggestion first; the next Tab moves to the next field.
+Esc closes the suggestions before cancelling the composer. Comma-separated
+recipients and quoted names containing commas are preserved. Autocomplete reads
+all email addresses, including aliases, from the compose account's address books
+and shared books. Changing the From account reloads its contacts.
+
+Starting a reply saves the sender locally if that email address is missing from
+those books. It checks aliases case-insensitively and preserves existing contact
+records. The first contact collection associated with the reply's From account
+is the destination; if there is none, the first shared contact collection is
+used. This happens when the reply opens, even if you later cancel the draft.
+Forwarding and new messages do not save senders. A configured contact collection
+is required; errors saving a contact are shown without preventing the reply.
+Normal MailSalonSync syncing uploads the new contact.
+
+To turn off saving reply senders, add this inside your existing `[options]`
+section (autocomplete remains available):
+
+```toml
+auto_add_reply_contacts = false
+```
+
+The default is `true`; existing configs enable it automatically.
 
 ### Selecting text while editing
 

@@ -57,6 +57,29 @@ collection you want, for example:
 receive = "MailSalonSync -plain sync -account personal-jmap -collection personal-contacts,personal-calendar"
 ```
 
+## Contact autocomplete and reply saving
+
+To/Cc/Bcc suggest names and all stored email addresses from the compose account's
+contact collections plus shared ones. Use Up/Down and Enter/Tab, or click a match.
+Only the recipient around the cursor is replaced; existing recipients are kept.
+Esc closes the suggestions. Switching the From account reloads its contacts.
+
+By default, opening a reply saves its sender to the first contact collection
+associated with the reply account (or the first shared contact collection if
+none is associated). The person is identified by email, including aliases,
+case-insensitively. Existing contacts are retained unchanged. If saving fails or
+no contact collection is configured, the status explains why and the reply
+continues. The saved contact remains even if you cancel the draft; the next sync
+uploads it. New messages and forwards do not automatically add contacts.
+
+Disable this in the existing `[options]` section:
+
+```toml
+auto_add_reply_contacts = false
+```
+
+Autocomplete still works when automatic contact saving is disabled.
+
 ## Controls
 
 | Key | Action |

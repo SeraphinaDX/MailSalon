@@ -52,6 +52,9 @@ encrypt_to_self = true
 [options]
 default_account = "cerberus"
 startup_sync = false
+# Opening a reply saves missing senders to the account’s first contact collection.
+# Set false to disable reply saving; contact autocomplete still works.
+auto_add_reply_contacts = true
 # Periodic background sync. Go duration syntax is supported: 30s, 5m, 1h.
 # Set to "0" to disable automatic periodic syncing.
 sync_interval = "5m"

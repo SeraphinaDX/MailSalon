@@ -93,6 +93,25 @@ func TestDefaultSyncInterval(t *testing.T) {
 	}
 }
 
+func TestAutoAddReplyContactsDefaultsAndDisable(t *testing.T) {
+	if !Default().AutoAddReplyContacts {
+		t.Fatal("reply contact saving should default on")
+	}
+	for _, options := range []string{"", "[options]\nauto_add_reply_contacts = true\n", "[options]\nauto_add_reply_contacts = false\n"} {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(path, []byte(options+"\n[[accounts]]\nname = \"personal\"\nmaildir = \"~/Maildir\"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AutoAddReplyContacts == strings.Contains(options, "false") {
+			t.Fatalf("option %q: got %v", options, cfg.AutoAddReplyContacts)
+		}
+	}
+}
+
 func TestLoadSyncIntervalZeroDisablesPeriodicSync(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

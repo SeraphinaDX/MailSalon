@@ -421,6 +421,10 @@ func Save(c config.Collection, original *Item, data []byte, uid string) error {
 		return err
 	}
 	defer release()
+	return saveLocked(c, original, data, uid)
+}
+
+func saveLocked(c config.Collection, original *Item, data []byte, uid string) error {
 	i, err := Parse(c, data)
 	if err != nil {
 		return err

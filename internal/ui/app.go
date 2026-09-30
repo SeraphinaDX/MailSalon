@@ -61,6 +61,7 @@ type composeState struct {
 	pgpEncrypt         bool
 
 	attachPrompt *textInput
+	completion   recipientCompletion
 }
 
 type resolvedTheme struct {
@@ -1120,6 +1121,12 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 	a.compose = c
 	a.updateComposeFrom()
 	a.status = composeModeName(c) + " ready"
+	if c.isReply {
+		if result := a.saveReplyContact(source.From, c.account); result != "" {
+			a.status += " — " + result
+		}
+	}
+	a.loadComposeContacts()
 }
 
 func (a *App) handleComposeEvent(e ui.Event) bool {
@@ -1144,6 +1151,9 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 	if e.ID == "<C-c>" {
 		return true
 	}
+	if e.ID == "<Escape>" && a.dismissCompletion() {
+		return false
+	}
 	if bindingMatches(e.ID, keys.Cancel) {
 		a.compose = nil
 		a.status = "Compose cancelled"
@@ -1162,6 +1172,9 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 	}
 	if bindingMatches(e.ID, keys.PGPMode) {
 		a.cycleComposePGPMode()
+		return false
+	}
+	if a.handleCompletionKey(e.ID) {
 		return false
 	}
 
@@ -1238,6 +1251,10 @@ func (a *App) handleAttachPrompt(id string) bool {
 }
 
 func (a *App) handleComposeMouse(e ui.Event) {
+	in := a.activeInput()
+	if (in == nil || !in.selection.dragging) && a.handleCompletionMouse(e) {
+		return
+	}
 	m, ok := e.Payload.(ui.Mouse)
 	if !ok {
 		return
@@ -1695,7 +1712,7 @@ func (a *App) renderCompose(w, h int) {
 		fromHint = fmt.Sprintf("%s: %s/%s switch account", fromLabel, keyLabel(keys.FocusLeft), keyLabel(keys.FocusRight))
 	}
 	legend := fmt.Sprintf(
-		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline  Tab indent  Shift+Tab previous field\n %s  Shift+arrows/drag Select  Alt+A All  Backspace/Delete Edit",
+		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: contact matches as you type; Up/Down choose, Enter/Tab accept  Body: Enter newline, Tab indent\n %s  Shift+arrows/drag Select  Alt+A All  Backspace/Delete Edit",
 		composeModeName(c), a.status, composePGPModeName(c, a.composeAccount()),
 		keyLabel(keys.Send), keyLabel(keys.Attach), keyLabel(keys.PGPMode), keyLabel(keys.Cancel),
 		keyLabel(keys.NextField), keyLabel(keys.PreviousField), fromHint,
@@ -1711,6 +1728,8 @@ func (a *App) renderCompose(w, h int) {
 		py := max(1, h/2-2)
 		c.attachPrompt.SetRect(x, py, x+promptW, py+3)
 		items = append(items, c.attachPrompt)
+	} else if popup := a.completionPopup(w, h); popup != nil {
+		items = append(items, popup)
 	}
 	ui.Render(items...)
 }
@@ -1987,6 +2006,7 @@ func (a *App) cycleComposeAccount(delta int) {
 	a.applyComposePGPDefaults()
 	a.updateComposeFrom()
 	a.status = "From: " + a.composeAccount().From + " — OpenPGP: " + composePGPModeName(a.compose, a.composeAccount())
+	a.loadComposeContacts()
 }
 
 func (a *App) applyComposePGPDefaults() {
