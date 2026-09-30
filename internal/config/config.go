@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
@@ -88,6 +89,7 @@ type Config struct {
 	Accounts       []Account
 	DefaultAccount string
 	StartupSync    bool
+	SyncInterval   time.Duration
 	Theme          Theme
 	Keybindings    Keybindings
 }
@@ -186,6 +188,7 @@ type fileConfig struct {
 
 	Options struct {
 		StartupSync    bool   `toml:"startup_sync"`
+		SyncInterval   string `toml:"sync_interval"`
 		DefaultAccount string `toml:"default_account"`
 	} `toml:"options"`
 
@@ -298,6 +301,7 @@ func Default() Config {
 			ArchiveFolder: "Archive",
 		}},
 		DefaultAccount: "default",
+		SyncInterval:   5 * time.Minute,
 		Theme:          DefaultTheme(),
 		Keybindings:    DefaultKeybindings(),
 	}
@@ -334,6 +338,13 @@ func Load(path string) (Config, error) {
 	}
 
 	cfg.StartupSync = raw.Options.StartupSync
+	if value := strings.TrimSpace(raw.Options.SyncInterval); value != "" {
+		interval, err := parseSyncInterval(value)
+		if err != nil {
+			return cfg, fmt.Errorf("options.sync_interval: %w", err)
+		}
+		cfg.SyncInterval = interval
+	}
 	cfg.DefaultAccount = strings.TrimSpace(raw.Options.DefaultAccount)
 	cfg.Theme = mergeTheme(DefaultTheme(), raw.Theme)
 	cfg.Keybindings = mergeKeybindings(DefaultKeybindings(), raw.Keybindings)
@@ -376,6 +387,20 @@ func Load(path string) (Config, error) {
 		return cfg, fmt.Errorf("default_account %q does not match any configured account", cfg.DefaultAccount)
 	}
 	return cfg, nil
+}
+
+func parseSyncInterval(value string) (time.Duration, error) {
+	interval, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q; use values such as \"30s\", \"5m\", \"1h\", or \"0\" to disable", value)
+	}
+	if interval < 0 {
+		return 0, fmt.Errorf("must be zero or positive")
+	}
+	if interval > 0 && interval < time.Second {
+		return 0, fmt.Errorf("must be at least 1s when enabled")
+	}
+	return interval, nil
 }
 
 func normalizeAccount(a fileAccount, index int) Account {
