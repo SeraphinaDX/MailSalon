@@ -11,7 +11,7 @@ mail and CardDAV, CalDAV, and JMAP contacts/calendars. You can also use `mbsync`
 
 **New here? Start with the [quickstart guide](docs/quickstart.md).** It walks
 through building MailSalon, connecting an existing mailbox, and sending your
-first message. Current version: **0.6.0**.
+first message. Current version: **0.6.1**.
 
 ## Get started
 
