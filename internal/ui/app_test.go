@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/metaspartan/gotui/v5/widgets"
+
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/config"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/maildir"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/mimeutil"
@@ -199,6 +201,20 @@ func TestComposeShowsCursorOnlyOnActiveField(t *testing.T) {
 	}
 	if !a.compose.body.ShowCursor {
 		t.Fatal("active body cursor is hidden")
+	}
+}
+
+func TestPeriodicReceiveCommandsDeduplicates(t *testing.T) {
+	accounts := []config.Account{
+		{Name: "personal", ReceiveCommand: "MailSalonSync -plain sync"},
+		{Name: "work", ReceiveCommand: " MailSalonSync -plain sync "},
+		{Name: "other", ReceiveCommand: "mbsync other"},
+		{Name: "disabled"},
+	}
+	got := periodicReceiveCommands(accounts)
+	want := []string{"MailSalonSync -plain sync", "mbsync other"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("periodicReceiveCommands = %#v, want %#v", got, want)
 	}
 }
 
