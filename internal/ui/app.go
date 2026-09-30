@@ -19,6 +19,7 @@ import (
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/maildir"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/mimeutil"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/pgp"
+	"git.cerberusgames.ca/Starstreak/MailSalon/internal/pim"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/transport"
 )
 
@@ -80,9 +81,18 @@ type resolvedTheme struct {
 }
 
 type App struct {
-	cfg     config.Config
-	theme   resolvedTheme
-	account int
+	view           int // 0 mail, 1 contacts, 2 calendar
+	pimCollections []config.Collection
+	pimCollection  int
+	pimItems       []pim.Item
+	pimAllItems    []pim.Item
+	pimSelected    int
+	pimOffset      int
+	pimQuery       string
+	pimEditor      *pimEditor
+	cfg            config.Config
+	theme          resolvedTheme
+	account        int
 
 	folders     []maildir.Folder
 	allMessages []maildir.Entry
@@ -224,8 +234,19 @@ func (a *App) Run() error {
 				a.render()
 				continue
 			}
+			if a.pimEditor != nil {
+				if a.handlePIMEditor(e) {
+					return nil
+				}
+				a.render()
+				continue
+			}
 			if e.Type == ui.MouseEvent {
-				a.handleMouse(e)
+				if a.view != 0 {
+					a.handlePIMMouse(e)
+				} else {
+					a.handleMouse(e)
+				}
 				a.render()
 				continue
 			}
@@ -254,6 +275,11 @@ func (a *App) Run() error {
 				a.status = fmt.Sprintf("Automatic sync finished with %d failure(s): %s", len(result.failures), strings.Join(result.failures, "; "))
 			} else {
 				a.status = fmt.Sprintf("Automatic sync complete (%d receive command(s))", result.commands)
+			}
+			if a.view != 0 {
+				if err := a.loadPIM(); err != nil {
+					a.setError(err)
+				}
 			}
 			a.render()
 		}
@@ -408,6 +434,21 @@ func (a *App) openMessage(index int) error {
 
 func (a *App) handleKey(id string) bool {
 	keys := a.bindings()
+	if bindingMatches(id, keys.MailView) {
+		a.setView(0)
+		return false
+	}
+	if bindingMatches(id, keys.ContactsView) {
+		a.setView(1)
+		return false
+	}
+	if bindingMatches(id, keys.CalendarView) {
+		a.setView(2)
+		return false
+	}
+	if a.view != 0 {
+		return a.handlePIMKey(id)
+	}
 	if !bindingMatches(id, keys.Delete) {
 		a.deleteArmed = false
 	}
@@ -613,6 +654,12 @@ func keyLabel(binding string) string {
 func (a *App) startSearch() {
 	a.searchActive = true
 	a.searchPrompt.Text = a.searchQuery
+	if a.view != 0 {
+		a.searchPrompt.Text = a.pimQuery
+		a.searchPrompt.Title = "Search contacts/calendar"
+	} else {
+		a.searchPrompt.Title = "Search current folder"
+	}
 	a.searchPrompt.Cursor = utf8.RuneCountInString(a.searchPrompt.Text)
 	a.status = "Search current folder"
 }
@@ -638,6 +685,11 @@ func (a *App) handleSearchEvent(e ui.Event) bool {
 }
 
 func (a *App) applySearch(query string) {
+	if a.view != 0 {
+		a.pimQuery = strings.TrimSpace(query)
+		a.filterPIM()
+		return
+	}
 	a.searchQuery = strings.TrimSpace(query)
 	a.selectedMessage = 0
 	a.messageOffset = 0
@@ -984,6 +1036,12 @@ func (a *App) runSync() {
 	if err := a.refreshFolders(); err != nil {
 		a.setError(err)
 		return
+	}
+	if a.view != 0 {
+		if err := a.loadPIM(); err != nil {
+			a.setError(err)
+			return
+		}
 	}
 	a.status = account.Name + " synchronized"
 	if s := strings.TrimSpace(out); s != "" {
@@ -1363,6 +1421,10 @@ func (a *App) render() {
 		a.renderCompose(w, h)
 		return
 	}
+	if a.view != 0 {
+		a.renderPIM(w, h)
+		return
+	}
 
 	folderW := clamp(w/5, 18, 30)
 	footerY := h - 3
@@ -1546,6 +1608,7 @@ func (a *App) footerText() string {
 	keys := a.bindings()
 	line1 := fmt.Sprintf(" [%s] %s", account.Name, a.status)
 	line2Parts := []string{
+		keyLabel(keys.MailView) + " Mail", keyLabel(keys.ContactsView) + " Contacts", keyLabel(keys.CalendarView) + " Calendar",
 		keyLabel(keys.Compose) + " Compose",
 		keyLabel(keys.Sync) + " Sync",
 		keyLabel(keys.Reply) + " Reply",

@@ -106,3 +106,19 @@ status = "#64d8cb"
 error = "#ff6b81"
 cursor_fg = "#071018"
 cursor_bg = "#ff9ecb"
+
+# Optional contacts/calendars. These paths must match MailSalonSync collections.
+# See docs/contacts-calendar.md. Omit account to show from every mail account.
+# [[collections]]
+# name = "Personal contacts"
+# account = "cerberus"
+# protocol = "carddav"
+# local_dir = "~/PIM/contacts/personal"
+#
+# [[collections]]
+# name = "Personal calendar"
+# account = "cerberus"
+# protocol = "caldav"
+# local_dir = "~/PIM/calendars/personal"
+#
+# JMAP directories use protocol = "jmap-contacts" or "jmap-calendars".
