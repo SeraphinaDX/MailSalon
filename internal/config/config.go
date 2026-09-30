@@ -89,13 +89,14 @@ type Theme struct {
 }
 
 type Config struct {
-	Accounts       []Account
-	Collections    []Collection
-	DefaultAccount string
-	StartupSync    bool
-	SyncInterval   time.Duration
-	Theme          Theme
-	Keybindings    Keybindings
+	Accounts             []Account
+	Collections          []Collection
+	DefaultAccount       string
+	StartupSync          bool
+	SyncInterval         time.Duration
+	AutoAddReplyContacts bool
+	Theme                Theme
+	Keybindings          Keybindings
 }
 
 // Collection reads the same directory configured in MailSalonSync. An empty
@@ -204,9 +205,10 @@ type fileConfig struct {
 	GPG fileGPG `toml:"gpg"`
 
 	Options struct {
-		StartupSync    bool   `toml:"startup_sync"`
-		SyncInterval   string `toml:"sync_interval"`
-		DefaultAccount string `toml:"default_account"`
+		StartupSync          bool   `toml:"startup_sync"`
+		SyncInterval         string `toml:"sync_interval"`
+		DefaultAccount       string `toml:"default_account"`
+		AutoAddReplyContacts *bool  `toml:"auto_add_reply_contacts"`
 	} `toml:"options"`
 
 	Theme fileTheme `toml:"theme"`
@@ -321,10 +323,11 @@ func Default() Config {
 			TrashFolder:   "Trash",
 			ArchiveFolder: "Archive",
 		}},
-		DefaultAccount: "default",
-		SyncInterval:   5 * time.Minute,
-		Theme:          DefaultTheme(),
-		Keybindings:    DefaultKeybindings(),
+		DefaultAccount:       "default",
+		SyncInterval:         5 * time.Minute,
+		AutoAddReplyContacts: true,
+		Theme:                DefaultTheme(),
+		Keybindings:          DefaultKeybindings(),
 	}
 }
 
@@ -359,6 +362,9 @@ func Load(path string) (Config, error) {
 	}
 
 	cfg.StartupSync = raw.Options.StartupSync
+	if raw.Options.AutoAddReplyContacts != nil {
+		cfg.AutoAddReplyContacts = *raw.Options.AutoAddReplyContacts
+	}
 	if value := strings.TrimSpace(raw.Options.SyncInterval); value != "" {
 		interval, err := parseSyncInterval(value)
 		if err != nil {
