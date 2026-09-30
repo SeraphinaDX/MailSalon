@@ -100,6 +100,7 @@ type App struct {
 	deleteArmed     bool
 	searchActive    bool
 	searchQuery     string
+	autoSyncing     bool
 
 	accountBar   *widgets.Paragraph
 	updateBar    *widgets.Paragraph
@@ -189,39 +190,105 @@ func (a *App) Run() error {
 	}
 
 	events := ui.PollEvents()
-	for e := range events {
-		if e.Type == ui.ResizeEvent {
-			a.render()
-			continue
-		}
-		if a.compose != nil {
-			if a.handleComposeEvent(e) {
-				return nil
-			}
-			a.render()
-			continue
-		}
-		if a.searchActive {
-			if a.handleSearchEvent(e) {
-				return nil
-			}
-			a.render()
-			continue
-		}
-		if e.Type == ui.MouseEvent {
-			a.handleMouse(e)
-			a.render()
-			continue
-		}
-		if e.Type != ui.KeyboardEvent {
-			continue
-		}
-		if a.handleKey(e.ID) {
-			return nil
-		}
-		a.render()
+	autoSyncDone := make(chan periodicSyncResult, 1)
+
+	var ticker *time.Ticker
+	var syncTick <-chan time.Time
+	if a.cfg.SyncInterval > 0 && len(periodicReceiveCommands(a.cfg.Accounts)) > 0 {
+		ticker = time.NewTicker(a.cfg.SyncInterval)
+		defer ticker.Stop()
+		syncTick = ticker.C
 	}
-	return nil
+
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if e.Type == ui.ResizeEvent {
+				a.render()
+				continue
+			}
+			if a.compose != nil {
+				if a.handleComposeEvent(e) {
+					return nil
+				}
+				a.render()
+				continue
+			}
+			if a.searchActive {
+				if a.handleSearchEvent(e) {
+					return nil
+				}
+				a.render()
+				continue
+			}
+			if e.Type == ui.MouseEvent {
+				a.handleMouse(e)
+				a.render()
+				continue
+			}
+			if e.Type != ui.KeyboardEvent {
+				continue
+			}
+			if a.handleKey(e.ID) {
+				return nil
+			}
+			a.render()
+
+		case <-syncTick:
+			if a.autoSyncing {
+				continue
+			}
+			a.autoSyncing = true
+			a.status = "Auto-syncing mail..."
+			a.render()
+			go a.runPeriodicSync(autoSyncDone)
+
+		case result := <-autoSyncDone:
+			a.autoSyncing = false
+			if err := a.refreshFolders(); err != nil {
+				a.setError(err)
+			} else if len(result.failures) > 0 {
+				a.status = fmt.Sprintf("Automatic sync finished with %d failure(s): %s", len(result.failures), strings.Join(result.failures, "; "))
+			} else {
+				a.status = fmt.Sprintf("Automatic sync complete (%d receive command(s))", result.commands)
+			}
+			a.render()
+		}
+	}
+}
+
+type periodicSyncResult struct {
+	commands int
+	failures []string
+}
+
+func periodicReceiveCommands(accounts []config.Account) []string {
+	seen := make(map[string]bool)
+	commands := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		command := strings.TrimSpace(account.ReceiveCommand)
+		if command == "" || seen[command] {
+			continue
+		}
+		seen[command] = true
+		commands = append(commands, command)
+	}
+	return commands
+}
+
+func (a *App) runPeriodicSync(done chan<- periodicSyncResult) {
+	commands := periodicReceiveCommands(a.cfg.Accounts)
+	result := periodicSyncResult{commands: len(commands)}
+	for _, command := range commands {
+		output, err := transport.Receive(context.Background(), command)
+		if err != nil {
+			result.failures = append(result.failures, commandError("receive command failed", output, err))
+		}
+	}
+	done <- result
 }
 
 func (a *App) applyStyles() {
@@ -897,6 +964,10 @@ func (a *App) saveAttachments() {
 }
 
 func (a *App) runSync() {
+	if a.autoSyncing {
+		a.status = "Automatic sync is already in progress"
+		return
+	}
 	account := a.currentAccount()
 	if strings.TrimSpace(account.ReceiveCommand) == "" {
 		a.status = fmt.Sprintf("No receive command configured for %s", account.Name)
