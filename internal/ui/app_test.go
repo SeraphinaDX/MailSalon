@@ -3,6 +3,7 @@ package uiapp
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -149,6 +150,55 @@ func TestComposeInitialFocus(t *testing.T) {
 	a.startCompose(source, true)
 	if a.compose == nil || a.compose.field != composeTo {
 		t.Fatalf("forward compose field = %v, want To", a.compose.field)
+	}
+}
+
+func TestComposeShowsCursorOnlyOnActiveField(t *testing.T) {
+	theme, err := resolveTheme(config.DefaultTheme())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{
+		cfg:   config.Config{Accounts: []config.Account{{Name: "test", From: "test@example.com"}}},
+		theme: theme,
+	}
+	a.startCompose(nil, false)
+
+	// New compose starts on To. Only that single-line input should retain the
+	// configured cursor style; the body cursor must be hidden.
+	a.highlightComposeField()
+	if reflect.DeepEqual(a.compose.to.CursorStyle, a.compose.to.TextStyle) {
+		t.Fatal("active To field cursor is hidden")
+	}
+	for name, input := range map[string]*widgets.Input{
+		"Cc":      a.compose.cc,
+		"Bcc":     a.compose.bcc,
+		"Subject": a.compose.subject,
+	} {
+		if !reflect.DeepEqual(input.CursorStyle, input.TextStyle) {
+			t.Fatalf("inactive %s field still shows a cursor", name)
+		}
+	}
+	if a.compose.body.ShowCursor {
+		t.Fatal("inactive body still shows a cursor")
+	}
+
+	// Moving focus to the body should hide every header cursor and show only
+	// the TextArea cursor.
+	a.compose.field = composeBody
+	a.highlightComposeField()
+	for name, input := range map[string]*widgets.Input{
+		"To":      a.compose.to,
+		"Cc":      a.compose.cc,
+		"Bcc":     a.compose.bcc,
+		"Subject": a.compose.subject,
+	} {
+		if !reflect.DeepEqual(input.CursorStyle, input.TextStyle) {
+			t.Fatalf("inactive %s field still shows a cursor", name)
+		}
+	}
+	if !a.compose.body.ShowCursor {
+		t.Fatal("active body cursor is hidden")
 	}
 }
 
