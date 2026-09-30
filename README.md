@@ -73,6 +73,7 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Delete to the active account's configured Trash folder; deletion is confirmed
   with a second press of the configured delete key.
 - Generic external receive command per account.
+- Automatic periodic background receive with a TOML-configurable interval. Identical receive commands shared by multiple accounts are run only once per cycle.
 - Generic external send command per account. MailSalon writes the complete RFC
   5322/MIME message to the command's standard input.
 - Mouse selection and mouse-wheel scrolling.
@@ -154,6 +155,7 @@ encrypt_to_self = true
 [options]
 default_account = "cerberus"
 startup_sync = false
+sync_interval = "5m"
 ```
 
 ### Multiple accounts
@@ -186,6 +188,7 @@ send = "msmtp -a work -t"
 [options]
 default_account = "cerberus"
 startup_sync = false
+sync_interval = "5m"
 ```
 
 Account names must be unique. `default_account` chooses the mailbox shown when
@@ -194,6 +197,20 @@ MailSalon starts.
 The earlier single-account `[mail]`, `[identity]`, and `[commands]` format is
 still accepted for compatibility, but `[[accounts]]` is the recommended format.
 
+### Automatic periodic sync
+
+MailSalon automatically runs configured receive commands every five minutes by default. Change the cadence under `[options]` using Go duration syntax:
+
+```toml
+[options]
+sync_interval = "10m"
+```
+
+Examples include `"30s"`, `"5m"`, and `"1h"`. Set `sync_interval = "0"` to disable periodic syncing entirely.
+
+Periodic sync runs receive commands in the background so composing, replying, and searching remain usable while mail is being fetched. If multiple accounts have the exact same receive command, MailSalon runs that command once per cycle instead of launching duplicates. After the cycle finishes, the active Maildir is rescanned and the UI is refreshed.
+
+The existing `startup_sync` option remains separate: it controls the one-time sync when MailSalon starts, while `sync_interval` controls recurring syncs after startup. Manual `u` sync still applies to the active account.
 
 ### Keybindings
 
@@ -363,9 +380,7 @@ experience.
 
 ### Receiving mail
 
-`receive` is intentionally generic. MailSalon executes the active account's
-configured command with `/bin/sh -c`, waits for it to finish, and rescans that
-account's Maildir.
+`receive` is intentionally generic. Manual sync executes the active account's configured command with `/bin/sh -c`, waits for it to finish, and rescans that account's Maildir. Periodic sync runs the configured receive commands in the background and deduplicates identical command strings before rescanning the active Maildir.
 
 Examples:
 
