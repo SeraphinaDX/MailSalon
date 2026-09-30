@@ -44,11 +44,11 @@ const (
 
 type composeState struct {
 	from               *widgets.Paragraph
-	to                 *widgets.Input
-	cc                 *widgets.Input
-	bcc                *widgets.Input
-	subject            *widgets.Input
-	body               *widgets.TextArea
+	to                 *textInput
+	cc                 *textInput
+	bcc                *textInput
+	subject            *textInput
+	body               *textArea
 	field              composeField
 	attachments        []string
 	forwardAttachments []mimeutil.Attachment
@@ -60,7 +60,7 @@ type composeState struct {
 	pgpSign            bool
 	pgpEncrypt         bool
 
-	attachPrompt *widgets.Input
+	attachPrompt *textInput
 }
 
 type resolvedTheme struct {
@@ -118,7 +118,7 @@ type App struct {
 	messageTbl   *widgets.Table
 	preview      *widgets.Paragraph
 	footer       *widgets.Paragraph
-	searchPrompt *widgets.Input
+	searchPrompt *textInput
 
 	compose *composeState
 }
@@ -180,9 +180,9 @@ func New(cfg config.Config) (*App, error) {
 	a.footer.Border = false
 	a.footer.WrapText = false
 
-	a.searchPrompt = widgets.NewInput()
+	a.searchPrompt = newTextInput()
 	a.searchPrompt.Title = "Search current folder"
-	a.searchPrompt.TitleBottom = "Enter apply  Esc cancel  Empty search clears"
+	a.searchPrompt.TitleBottom = "Enter apply  Esc cancel  Alt+A all  Shift+arrows select"
 	a.searchPrompt.BorderRounded = true
 
 	a.applyStyles()
@@ -355,6 +355,7 @@ func (a *App) applyStyles() {
 	a.footer.TextStyle = ui.NewStyle(a.theme.status, a.theme.background)
 	a.searchPrompt.TextStyle = text
 	a.searchPrompt.CursorStyle = ui.NewStyle(a.theme.cursorFG, a.theme.cursorBG)
+	a.searchPrompt.SelectionStyle = ui.NewStyle(a.theme.selectedFG, a.theme.selectedBG)
 }
 
 func (a *App) refreshFolders() error {
@@ -661,10 +662,16 @@ func (a *App) startSearch() {
 		a.searchPrompt.Title = "Search current folder"
 	}
 	a.searchPrompt.Cursor = utf8.RuneCountInString(a.searchPrompt.Text)
+	a.searchPrompt.selection.reset()
 	a.status = "Search current folder"
 }
 
 func (a *App) handleSearchEvent(e ui.Event) bool {
+	if e.Type == ui.MouseEvent {
+		a.searchPrompt.mouse(e)
+		return false
+	}
+	e.ID = editorEventID(e)
 	if e.Type != ui.KeyboardEvent {
 		return false
 	}
@@ -1056,12 +1063,12 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 	}
 	c := &composeState{
 		from:         widgets.NewParagraph(),
-		to:           widgets.NewInput(),
-		cc:           widgets.NewInput(),
-		bcc:          widgets.NewInput(),
-		subject:      widgets.NewInput(),
-		body:         widgets.NewTextArea(),
-		attachPrompt: widgets.NewInput(),
+		to:           newTextInput(),
+		cc:           newTextInput(),
+		bcc:          newTextInput(),
+		subject:      newTextInput(),
+		body:         newTextArea(),
+		attachPrompt: newTextInput(),
 		account:      accountIndex,
 		isReply:      source != nil && !forward,
 		isForward:    source != nil && forward,
@@ -1082,6 +1089,7 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 	c.subject.Title = "Subject"
 	c.body.Title = "Body"
 	c.body.ShowCursor = true
+	c.body.hardWrap = true
 	c.attachPrompt.Title = "Attach file path"
 	a.styleComposeWidgets(c)
 
@@ -1111,6 +1119,7 @@ func (a *App) startCompose(source *mimeutil.ParsedMessage, forward bool) {
 }
 
 func (a *App) handleComposeEvent(e ui.Event) bool {
+	e.ID = editorEventID(e)
 	c := a.compose
 	if c == nil {
 		return false
@@ -1143,6 +1152,7 @@ func (a *App) handleComposeEvent(e ui.Event) bool {
 	if bindingMatches(e.ID, keys.Attach) {
 		c.attachPrompt.Text = ""
 		c.attachPrompt.Cursor = 0
+		c.attachPrompt.selection.reset()
 		c.attachPrompt.TitleBottom = "active"
 		return false
 	}
@@ -1230,42 +1240,51 @@ func (a *App) handleComposeMouse(e ui.Event) {
 	}
 	p := image.Pt(m.X, m.Y)
 	c := a.compose
-	if c.attachPrompt.TitleBottom == "active" && p.In(c.attachPrompt.Inner) {
+	if c.attachPrompt.TitleBottom == "active" {
+		c.attachPrompt.mouse(e)
 		return
 	}
-	if p.In(c.from.Inner) {
-		switch e.ID {
-		case "<MouseWheelUp>", "MouseWheelUp":
-			c.field = composeFrom
-			a.cycleComposeAccount(-1)
-			return
-		case "<MouseWheelDown>", "MouseWheelDown":
-			c.field = composeFrom
-			a.cycleComposeAccount(1)
+	fields := []struct {
+		input *textInput
+		field composeField
+	}{
+		{c.to, composeTo}, {c.cc, composeCc}, {c.bcc, composeBcc}, {c.subject, composeSubject},
+	}
+	// A drag keeps ownership even after the pointer crosses another field.
+	if c.body.selection.dragging && c.body.mouse(e) {
+		c.field = composeBody
+		return
+	}
+	for _, f := range fields {
+		if f.input.selection.dragging && f.input.mouse(e) {
+			c.field = f.field
 			return
 		}
 	}
-	if e.ID != "<MouseLeft>" && e.ID != "MouseLeft" {
+	for _, f := range fields {
+		if f.input.mouse(e) {
+			c.field = f.field
+			return
+		}
+	}
+	if c.body.mouse(e) {
+		c.field = composeBody
 		return
 	}
-	switch {
-	case p.In(c.from.Inner):
+	if !p.In(c.from.Inner) {
+		return
+	}
+	switch e.ID {
+	case "<MouseLeft>", "MouseLeft", "<MouseWheelDown>", "MouseWheelDown":
 		c.field = composeFrom
 		a.cycleComposeAccount(1)
-	case p.In(c.to.Inner):
-		c.field = composeTo
-	case p.In(c.cc.Inner):
-		c.field = composeCc
-	case p.In(c.bcc.Inner):
-		c.field = composeBcc
-	case p.In(c.subject.Inner):
-		c.field = composeSubject
-	case p.In(c.body.Inner):
-		c.field = composeBody
+	case "<MouseWheelUp>", "MouseWheelUp":
+		c.field = composeFrom
+		a.cycleComposeAccount(-1)
 	}
 }
 
-func (a *App) activeInput() *widgets.Input {
+func (a *App) activeInput() *textInput {
 	if a.compose == nil {
 		return nil
 	}
@@ -1283,59 +1302,21 @@ func (a *App) activeInput() *widgets.Input {
 	}
 }
 
-func (a *App) editInput(in *widgets.Input, id string) {
+func (a *App) editInput(in *textInput, id string) {
 	if in == nil {
 		return
 	}
-	switch id {
-	case "<Backspace>", "<Backspace2>":
-		in.Backspace()
-	case "<Left>":
-		in.MoveCursorLeft()
-	case "<Right>":
-		in.MoveCursorRight()
-	case "<Home>":
-		in.Cursor = 0
-	case "<End>":
-		in.Cursor = utf8.RuneCountInString(in.Text)
-	case "<Delete>":
-		deleteInputRune(in)
-	default:
-		if r, ok := printableRune(id); ok {
-			in.InsertRune(r)
-		}
-	}
+	in.Text, in.Cursor, _ = in.selection.edit(in.Text, in.Cursor, id, false, 1)
 }
 
-func (a *App) editTextArea(ta *widgets.TextArea, id string) {
-	switch id {
-	case "<Backspace>", "<Backspace2>":
-		textAreaBackspace(ta)
-	case "<Delete>":
-		ta.DeleteRune()
-	case "<Enter>":
-		ta.InsertNewline()
-	case "<Tab>":
-		// gotui currently delivers terminal paste as ordinary key events rather
-		// than a distinct paste event. Keep pasted tabs useful and harmless by
-		// representing them as four spaces in the message body.
-		for i := 0; i < 4; i++ {
-			ta.InsertRune(' ')
-		}
-		wrapComposeBodyLine(ta)
-	case "<Left>":
-		ta.MoveCursor(-1, 0)
-	case "<Right>":
-		ta.MoveCursor(1, 0)
-	case "<Up>":
-		ta.MoveCursor(0, -1)
-	case "<Down>":
-		ta.MoveCursor(0, 1)
-	default:
-		if r, ok := printableRune(id); ok {
-			ta.InsertRune(r)
-			wrapComposeBodyLine(ta)
-		}
+func (a *App) editTextArea(ta *textArea, id string) {
+	if ta == nil {
+		return
+	}
+	text, cursor, changed := ta.selection.edit(ta.Text, textOffset(ta.Text, ta.Cursor), id, true, ta.Inner.Dy())
+	ta.Text, ta.Cursor = text, textPoint(text, cursor)
+	if changed && ta.hardWrap && id != "<Backspace>" && id != "<Backspace2>" && id != "<Delete>" {
+		wrapComposeBodyLine(ta.TextArea)
 	}
 }
 
@@ -1710,7 +1691,7 @@ func (a *App) renderCompose(w, h int) {
 		fromHint = fmt.Sprintf("%s: %s/%s switch account", fromLabel, keyLabel(keys.FocusLeft), keyLabel(keys.FocusRight))
 	}
 	legend := fmt.Sprintf(
-		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline  Tab indent  Shift+Tab previous field\n %s  Backspace/Delete Edit",
+		" [%s] %s — OpenPGP: %s\n %s Send  %s Attach  %s PGP mode  %s Cancel  %s/%s Fields\n To/Cc/Bcc: comma-separated recipients  Body: arrows move  Enter newline  Tab indent  Shift+Tab previous field\n %s  Shift+arrows/drag Select  Alt+A All  Backspace/Delete Edit",
 		composeModeName(c), a.status, composePGPModeName(c, a.composeAccount()),
 		keyLabel(keys.Send), keyLabel(keys.Attach), keyLabel(keys.PGPMode), keyLabel(keys.Cancel),
 		keyLabel(keys.NextField), keyLabel(keys.PreviousField), fromHint,
@@ -1754,7 +1735,7 @@ func (a *App) highlightComposeField() {
 	// text style, then restore the configured cursor style only for the field
 	// that currently owns compose focus.
 	c.from.BorderStyle = inactive
-	for _, w := range []*widgets.Input{c.to, c.cc, c.bcc, c.subject} {
+	for _, w := range []*textInput{c.to, c.cc, c.bcc, c.subject} {
 		w.BorderStyle = inactive
 		w.CursorStyle = w.TextStyle
 	}
@@ -1804,7 +1785,7 @@ func (a *App) styleComposeWidgets(c *composeState) {
 	c.from.TitleBottomStyle = muted
 	c.from.TextStyle = ui.NewStyle(a.theme.account, a.theme.background)
 
-	for _, w := range []*widgets.Input{c.to, c.cc, c.bcc, c.subject, c.attachPrompt} {
+	for _, w := range []*textInput{c.to, c.cc, c.bcc, c.subject, c.attachPrompt} {
 		w.BorderRounded = true
 		w.BackgroundColor = a.theme.background
 		w.BorderStyle = border
@@ -1812,6 +1793,7 @@ func (a *App) styleComposeWidgets(c *composeState) {
 		w.TitleBottomStyle = muted
 		w.TextStyle = text
 		w.CursorStyle = cursor
+		w.SelectionStyle = ui.NewStyle(a.theme.selectedFG, a.theme.selectedBG)
 	}
 	c.body.BorderRounded = true
 	c.body.BackgroundColor = a.theme.background
@@ -1820,6 +1802,7 @@ func (a *App) styleComposeWidgets(c *composeState) {
 	c.body.TitleBottomStyle = muted
 	c.body.TextStyle = text
 	c.body.CursorStyle = cursor
+	c.body.SelectionStyle = ui.NewStyle(a.theme.selectedFG, a.theme.selectedBG)
 }
 
 func (a *App) updateFooterStyle() {
@@ -2118,39 +2101,6 @@ func printableRune(id string) (rune, bool) {
 		return 0, false
 	}
 	return r, true
-}
-
-func deleteInputRune(in *widgets.Input) {
-	runes := []rune(in.Text)
-	if in.Cursor < 0 || in.Cursor >= len(runes) {
-		return
-	}
-	in.Text = string(append(runes[:in.Cursor], runes[in.Cursor+1:]...))
-}
-
-func textAreaBackspace(ta *widgets.TextArea) {
-	lines := strings.Split(ta.Text, "\n")
-	y := clamp(ta.Cursor.Y, 0, max(0, len(lines)-1))
-	if len(lines) == 0 {
-		return
-	}
-	runes := []rune(lines[y])
-	x := clamp(ta.Cursor.X, 0, len(runes))
-	if x > 0 {
-		lines[y] = string(append(runes[:x-1], runes[x:]...))
-		ta.Text = strings.Join(lines, "\n")
-		ta.Cursor = image.Pt(x-1, y)
-		return
-	}
-	if y == 0 {
-		return
-	}
-	prev := []rune(lines[y-1])
-	newX := len(prev)
-	lines[y-1] += lines[y]
-	lines = append(lines[:y], lines[y+1:]...)
-	ta.Text = strings.Join(lines, "\n")
-	ta.Cursor = image.Pt(newX, y-1)
 }
 
 func parseAddressSet(raw string) map[string]bool {

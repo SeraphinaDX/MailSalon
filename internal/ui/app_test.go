@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/metaspartan/gotui/v5/widgets"
-
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/config"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/maildir"
 	"git.cerberusgames.ca/Starstreak/MailSalon/internal/mimeutil"
@@ -172,7 +170,7 @@ func TestComposeShowsCursorOnlyOnActiveField(t *testing.T) {
 	if reflect.DeepEqual(a.compose.to.CursorStyle, a.compose.to.TextStyle) {
 		t.Fatal("active To field cursor is hidden")
 	}
-	for name, input := range map[string]*widgets.Input{
+	for name, input := range map[string]*textInput{
 		"Cc":      a.compose.cc,
 		"Bcc":     a.compose.bcc,
 		"Subject": a.compose.subject,
@@ -189,7 +187,7 @@ func TestComposeShowsCursorOnlyOnActiveField(t *testing.T) {
 	// the TextArea cursor.
 	a.compose.field = composeBody
 	a.highlightComposeField()
-	for name, input := range map[string]*widgets.Input{
+	for name, input := range map[string]*textInput{
 		"To":      a.compose.to,
 		"Cc":      a.compose.cc,
 		"Bcc":     a.compose.bcc,

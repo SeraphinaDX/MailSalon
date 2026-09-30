@@ -1,4 +1,4 @@
-# MailSalon 0.4.0
+# MailSalon 0.5.0
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
@@ -65,6 +65,7 @@ account selector, or use the mouse wheel over it to switch accounts.
 - Case-insensitive search within the current folder across sender, recipients,
   subject, date, Message-ID, and message body.
 - New message composition with separate To, Cc, and Bcc fields. Each field accepts multiple comma-separated RFC-style addresses.
+- Text selection in every editable field with Shift+arrows, mouse dragging, and Alt+A select all. Typing/pasting replaces the selection; Backspace/Delete removes it.
 - Reply with `In-Reply-To`, `References`, and quoted original text.
 - Selectable **Reply from** account in the compose UI.
 - Automatic reply-account selection when a message's To/Cc address matches a
@@ -260,6 +261,34 @@ previous_field = "Shift+Tab"
 ```
 
 Duplicate bindings within the same UI mode are rejected at startup instead of making one action silently unreachable. Mouse controls are unchanged by keyboard remapping.
+
+### Selecting text while editing
+
+Text selection works in To/Cc/Bcc/Subject, the message body, search, attachment
+paths, contact/calendar creation fields, and the full-source editor. Selection
+uses your theme's `selected_fg` and `selected_bg` colors.
+
+| Key or action | Behavior |
+| --- | --- |
+| Shift+Left/Right | Extend or shrink the selection by a character |
+| Shift+Up/Down | Extend the selection across lines in a multiline editor |
+| Shift+Home/End | Select to the start/end of the current line |
+| Ctrl+Shift+Home/End | Select to the start/end of the entire text |
+| Alt+A | Select all text in the current editable field |
+| Ctrl+Space, then arrows | Start a keyboard selection; Ctrl+Space again clears it |
+| Left mouse drag | Select text; a click places the cursor |
+| Type or terminal paste | Replace the selected text |
+| Backspace/Delete | Remove the selected text |
+| Left/Right without Shift | Collapse the selection to its start/end |
+
+Ctrl+A continues to attach a file in the composer. It also selects all in
+editors where it has no configured action, such as search and the attachment
+path prompt. Existing configured actions take precedence. Ctrl+C retains its
+quit behavior. Selection edits the local field; it does not copy to the system
+clipboard. Use Ctrl+Space if your terminal intercepts Shift+arrow shortcuts.
+
+The From/Reply from field selects an account identity and is not a text editor.
+Raw contact/calendar source scrolls horizontally without adding wrap newlines.
 
 ### Themes
 
@@ -545,3 +574,4 @@ available.
 MailSalon is intentionally a Maildir MUA rather than an IMAP/JMAP client. It
 owns the local mail/user-interface behavior and delegates transport to whatever
 external tools the user chooses.
+

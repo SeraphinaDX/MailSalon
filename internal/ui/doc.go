@@ -14,6 +14,10 @@
 // wrapping helper after inserted text. Those behaviors are intentional and have
 // regression tests; changing key dispatch should preserve them.
 //
+// text_edit.go provides shared selection and drawing for all editable inputs.
+// It recovers modifiers from the original tcell event and counts selection
+// offsets as runes, separately from terminal cell widths and logical lines.
+//
 // Network mail operations are not implemented here. The UI reads/writes the
 // local Maildir and invokes the transport package for configured receive/send
 // commands, keeping protocol-specific synchronization outside the interface.

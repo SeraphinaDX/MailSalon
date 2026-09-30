@@ -15,9 +15,9 @@ import (
 
 type pimEditor struct {
 	original *pim.Item
-	fields   []*widgets.Input
+	fields   []*textInput
 	field    int
-	raw      *widgets.TextArea
+	raw      *textArea
 }
 
 func (a *App) setView(view int) {
@@ -348,7 +348,7 @@ func (a *App) startPIMEditor(edit bool) {
 		}
 		item := a.pimItems[a.pimSelected]
 		e.original = &item
-		e.raw = widgets.NewTextArea()
+		e.raw = newTextArea()
 		e.raw.Text = strings.ReplaceAll(string(item.Data), "\r\n", "\n")
 		e.raw.Title = "Edit source (all properties retained)"
 		e.raw.ShowCursor = true
@@ -361,7 +361,7 @@ func (a *App) startPIMEditor(edit bool) {
 			values = []string{"", now.Format("2006-01-02T15:04:05"), now.Add(time.Hour).Format("2006-01-02T15:04:05"), "", ""}
 		}
 		for i, label := range labels {
-			f := widgets.NewInput()
+			f := newTextInput()
 			f.Title = label
 			f.Text = values[i]
 			f.Cursor = utf8.RuneCountInString(f.Text)
@@ -376,15 +376,20 @@ func (a *App) handlePIMEditor(event ui.Event) bool {
 	e := a.pimEditor
 	k := a.bindings()
 	if event.Type == ui.MouseEvent {
-		m, ok := event.Payload.(ui.Mouse)
-		if !ok {
+		if e.raw != nil {
+			e.raw.mouse(event)
 			return false
 		}
-		if event.ID == "<MouseLeft>" || event.ID == "MouseLeft" {
-			for i, f := range e.fields {
-				if image.Pt(m.X, m.Y).In(f.Inner) {
-					e.field = i
-				}
+		for i, f := range e.fields {
+			if f.selection.dragging && f.mouse(event) {
+				e.field = i
+				return false
+			}
+		}
+		for i, f := range e.fields {
+			if f.mouse(event) {
+				e.field = i
+				return false
 			}
 		}
 		return false
@@ -392,7 +397,7 @@ func (a *App) handlePIMEditor(event ui.Event) bool {
 	if event.Type != ui.KeyboardEvent {
 		return false
 	}
-	id := event.ID
+	id := editorEventID(event)
 	if id == "<C-c>" {
 		return true
 	}
@@ -459,6 +464,7 @@ func (a *App) renderPIMEditor(w, h int) {
 		style(&e.raw.Block)
 		e.raw.TextStyle = ui.NewStyle(a.theme.foreground, a.theme.background)
 		e.raw.CursorStyle = ui.NewStyle(a.theme.cursorFG, a.theme.cursorBG)
+		e.raw.SelectionStyle = ui.NewStyle(a.theme.selectedFG, a.theme.selectedBG)
 		e.raw.SetRect(0, 0, w, h-3)
 		items = append(items, e.raw)
 	} else {
@@ -472,6 +478,7 @@ func (a *App) renderPIMEditor(w, h int) {
 			style(&f.Block)
 			f.TextStyle = ui.NewStyle(a.theme.foreground, a.theme.background)
 			f.CursorStyle = ui.NewStyle(a.theme.cursorFG, a.theme.cursorBG)
+			f.SelectionStyle = ui.NewStyle(a.theme.selectedFG, a.theme.selectedBG)
 			if i != e.field {
 				f.CursorStyle = f.TextStyle
 			}
@@ -483,7 +490,7 @@ func (a *App) renderPIMEditor(w, h int) {
 		}
 	}
 	a.footer.SetRect(0, h-3, w, h)
-	a.footer.Text = safeUI(a.status + "\n" + keyLabel(a.bindings().Send) + " Save locally  " + keyLabel(a.bindings().Cancel) + " Cancel  Tab/Shift+Tab Fields")
+	a.footer.Text = safeUI(a.status + "\n" + keyLabel(a.bindings().Send) + " Save locally  " + keyLabel(a.bindings().Cancel) + " Cancel  Tab/Shift+Tab Fields\nShift+arrows/drag Select  Alt+A All  Backspace/Delete Edit")
 	items = append(items, a.footer)
 	ui.Render(items...)
 }
