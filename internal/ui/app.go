@@ -113,6 +113,7 @@ type App struct {
 	autoSyncing     bool
 
 	accountBar   *widgets.Paragraph
+	viewTabs     [3]*widgets.Paragraph
 	updateBar    *widgets.Paragraph
 	folderList   *widgets.List
 	messageTbl   *widgets.Table
@@ -866,6 +867,9 @@ func (a *App) homeEnd(end bool) {
 }
 
 func (a *App) handleMouse(e ui.Event) {
+	if a.handleViewTabMouse(e) {
+		return
+	}
 	m, ok := e.Payload.(ui.Mouse)
 	if !ok {
 		return
@@ -1417,12 +1421,12 @@ func (a *App) render() {
 
 	accountH := 3
 	updateH := 3
-	a.accountBar.SetRect(0, 0, folderW, accountH)
-	a.updateBar.SetRect(0, accountH, folderW, accountH+updateH)
-	a.folderList.SetRect(0, accountH+updateH, folderW, footerY)
-	a.messageTbl.SetRect(rightX, 0, w, listH)
+	a.accountBar.SetRect(0, 1, folderW, 1+accountH)
+	a.updateBar.SetRect(0, 1+accountH, folderW, 1+accountH+updateH)
+	a.folderList.SetRect(0, 1+accountH+updateH, folderW, footerY)
+	a.messageTbl.SetRect(rightX, 1, w, listH)
 	a.preview.SetRect(rightX, listH, w, footerY)
-	a.footer.SetRect(0, footerY, w, h)
+	setBarRect(a.footer, 0, footerY, w, h)
 
 	a.populateAccountBar()
 	a.populateUpdateBar()
@@ -1433,7 +1437,7 @@ func (a *App) render() {
 	a.footer.Text = a.footerText()
 
 	a.updateFocusStyles()
-	items := []ui.Drawable{a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer}
+	items := append(a.layoutViewTabs(w), a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer)
 	if a.searchActive {
 		promptW := clamp(w-12, 40, 90)
 		x := (w - promptW) / 2
@@ -1680,7 +1684,7 @@ func (a *App) renderCompose(w, h int) {
 		attachments.Text = safeUI(strings.Join(names, ", "))
 	}
 
-	a.footer.SetRect(0, footerY, w, h)
+	setBarRect(a.footer, 0, footerY, w, h)
 	keys := a.bindings()
 	fromLabel := "From"
 	fromHint := "From: selected account identity"
@@ -1966,6 +1970,10 @@ func (a *App) switchAccount(delta int) {
 	a.previewScroll = 0
 	if err := a.refreshFolders(); err != nil {
 		a.setError(err)
+		return
+	}
+	if a.view != 0 {
+		a.setView(a.view)
 		return
 	}
 	a.status = "Switched to " + a.currentAccount().Name

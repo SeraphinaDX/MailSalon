@@ -114,9 +114,7 @@ func (a *App) handlePIMKey(id string) bool {
 			a.focus = focusPreview
 		}
 	case bindingMatches(id, k.SwitchAccount):
-		view := a.view
 		a.switchAccount(1)
-		a.setView(view)
 	case bindingMatches(id, k.Sync):
 		a.runSync()
 	case bindingMatches(id, k.Refresh):
@@ -206,28 +204,32 @@ func (a *App) renderPIM(w, h int) {
 	left := clamp(w/5, 18, 30)
 	footer := h - 3
 	split := max(8, h*45/100)
-	a.accountBar.SetRect(0, 0, left, 3)
-	a.updateBar.SetRect(0, 3, left, 6)
-	a.folderList.SetRect(0, 6, left, footer)
-	a.messageTbl.SetRect(left, 0, w, split)
+	a.accountBar.SetRect(0, 1, left, 4)
+	a.updateBar.SetRect(0, 4, left, 7)
+	a.folderList.SetRect(0, 7, left, footer)
+	a.messageTbl.SetRect(left, 1, w, split)
 	a.preview.SetRect(left, split, w, footer)
-	a.footer.SetRect(0, footer, w, h)
+	setBarRect(a.footer, 0, footer, w, h)
 	a.populateAccountBar()
 	a.populateUpdateBar()
 	a.updateBar.Title = "Sync collections"
 	a.folderList.Title = "Address books"
-	a.messageTbl.Title = "Contacts"
+	a.messageTbl.Title = "Contacts — " + a.currentAccount().Name
 	a.preview.Title = "Contact"
 	if a.view == 2 {
 		a.folderList.Title = "Calendars"
-		a.messageTbl.Title = "Calendar items (series starts)"
+		a.messageTbl.Title = "Calendar — " + a.currentAccount().Name + " (series starts)"
 		a.preview.Title = "Calendar item"
 	}
 	visibleCollections := max(1, a.folderList.Inner.Dy())
 	a.folderOffset = keepVisible(a.pimCollection, a.folderOffset, visibleCollections, len(a.pimCollections))
 	a.folderList.Rows = nil
 	for i := a.folderOffset; i < min(len(a.pimCollections), a.folderOffset+visibleCollections); i++ {
-		a.folderList.Rows = append(a.folderList.Rows, safeUI(a.pimCollections[i].Name))
+		name := a.pimCollections[i].Name
+		if a.pimCollections[i].Account == "" {
+			name = "Shared: " + name
+		}
+		a.folderList.Rows = append(a.folderList.Rows, safeUI(name))
 	}
 	a.folderList.SelectedRow = a.pimCollection - a.folderOffset
 	if len(a.pimCollections) == 0 {
@@ -273,9 +275,9 @@ func (a *App) renderPIM(w, h int) {
 		a.preview.Text = strings.Join(lines[a.previewScroll:], "\n")
 	}
 	k := a.bindings()
-	a.footer.Text = safeUI(fmt.Sprintf(" [%s] %s\n %s Mail  %s Contacts  %s Calendar  n New  %s Edit source  %s Compose to contact\n %s Search  %s Delete  %s Sync  %s Refresh  Tab Focus  %s Account  %s Quit", a.currentAccount().Name, a.status, keyLabel(k.MailView), keyLabel(k.ContactsView), keyLabel(k.CalendarView), keyLabel(k.Archive), keyLabel(k.Compose), keyLabel(k.Search), keyLabel(k.Delete), keyLabel(k.Sync), keyLabel(k.Refresh), keyLabel(k.SwitchAccount), keyLabel(k.Quit)))
+	a.footer.Text = safeUI(fmt.Sprintf(" [%s] %s — %s\n %s Mail  %s Contacts  %s Calendar  n New  %s Edit source  %s Compose to contact\n %s Search  %s Delete  %s Sync  %s Refresh  Tab Focus  %s Account  %s Quit", a.currentAccount().Name, a.pimScope(), a.status, keyLabel(k.MailView), keyLabel(k.ContactsView), keyLabel(k.CalendarView), keyLabel(k.Archive), keyLabel(k.Compose), keyLabel(k.Search), keyLabel(k.Delete), keyLabel(k.Sync), keyLabel(k.Refresh), keyLabel(k.SwitchAccount), keyLabel(k.Quit)))
 	a.updateFocusStyles()
-	items := []ui.Drawable{a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer}
+	items := append(a.layoutViewTabs(w), a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer)
 	if a.searchActive {
 		a.searchPrompt.SetRect(left+2, max(1, h/2-2), w-2, max(1, h/2-2)+3)
 		items = append(items, a.searchPrompt)
@@ -284,6 +286,9 @@ func (a *App) renderPIM(w, h int) {
 }
 
 func (a *App) handlePIMMouse(e ui.Event) {
+	if a.handleViewTabMouse(e) {
+		return
+	}
 	m, ok := e.Payload.(ui.Mouse)
 	if !ok {
 		return
@@ -292,9 +297,7 @@ func (a *App) handlePIMMouse(e ui.Event) {
 	if e.ID == "<MouseLeft>" || e.ID == "MouseLeft" {
 		switch {
 		case p.In(a.accountBar.Rectangle):
-			view := a.view
 			a.switchAccount(1)
-			a.setView(view)
 		case p.In(a.updateBar.Rectangle):
 			a.runSync()
 		case p.In(a.folderList.Inner):
@@ -489,7 +492,7 @@ func (a *App) renderPIMEditor(w, h int) {
 			items = append(items, f)
 		}
 	}
-	a.footer.SetRect(0, h-3, w, h)
+	setBarRect(a.footer, 0, h-3, w, h)
 	a.footer.Text = safeUI(a.status + "\n" + keyLabel(a.bindings().Send) + " Save locally  " + keyLabel(a.bindings().Cancel) + " Cancel  Tab/Shift+Tab Fields\nShift+arrows/drag Select  Alt+A All  Backspace/Delete Edit")
 	items = append(items, a.footer)
 	ui.Render(items...)

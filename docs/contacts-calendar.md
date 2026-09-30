@@ -1,6 +1,8 @@
-# Contacts and calendars (0.4.0)
+# Contacts and calendars
 
-MailSalon now has three modes: **1 Mail**, **2 Contacts**, **3 Calendar**.
+The highlighted view bar at the top shows **1 Mail**, **2 Contacts**, and
+**3 Calendar**. Press a shortcut or click a tab to switch views. The selected
+account stays the same when you switch views.
 Contacts and calendars use local files synchronized by MailSalonSync 0.6.0.
 Network credentials and sync state stay with the sync tool.
 
@@ -22,8 +24,15 @@ protocol = "caldav"
 local_dir = "~/PIM/calendars/personal"
 ```
 
-`account` must match a MailSalon account name. Omit it to show a collection from
-every mail account. `local_dir` must match the corresponding MailSalonSync
+`account` must match the `name` in the associated MailSalon `[[accounts]]`
+block (not the MailSalonSync account name or JMAP object ID). Set it on each
+account’s own address books and calendars. Switching accounts then changes
+which collections and items are visible.
+
+Omit `account` only for a collection you intend to share across every account.
+These appear with a `Shared:` label and “shared across accounts” in the footer;
+they remain visible when switching accounts. Account-bound collections show
+“ACCOUNT only” in the footer. `local_dir` must match the corresponding MailSalonSync
 collection exactly; `protocol` must match its stored format. Each collection
 directory contains individual items rather than one concatenated export.
 
@@ -65,7 +74,8 @@ receive = "MailSalonSync -plain sync -account personal-jmap -collection personal
 | `R` | Reload local files |
 | `q` | Quit |
 
-Mouse clicks and wheel navigation work in the lists and preview. New-item forms
+The Mail/Contacts/Calendar bar is clickable. Mouse clicks and wheel navigation
+work in the lists and preview. New-item forms
 use Tab/Shift+Tab or Enter to move fields. Ctrl+S saves locally; Esc cancels.
 Only the active field shows a cursor. Source editing uses the multiline editor
 and preserves fields beyond those shown in previews. Its Ctrl+S saves locally;
@@ -108,3 +118,4 @@ Existing CalDAV VTODO files are readable in the calendar view, but there is no
 task creation form. Reminder notifications, invitation handling/RSVP, free/busy,
 contact autocomplete in arbitrary recipient fields, and structured editing of
 all existing properties remain future increments.
+

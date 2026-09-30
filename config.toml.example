@@ -108,7 +108,8 @@ cursor_fg = "#071018"
 cursor_bg = "#ff9ecb"
 
 # Optional contacts/calendars. These paths must match MailSalonSync collections.
-# See docs/contacts-calendar.md. Omit account to show from every mail account.
+# See docs/contacts-calendar.md. Set account to the matching [[accounts]] name.
+# Omit account only for collections intentionally shared across accounts.
 # [[collections]]
 # name = "Personal contacts"
 # account = "cerberus"
@@ -122,3 +123,4 @@ cursor_bg = "#ff9ecb"
 # local_dir = "~/PIM/calendars/personal"
 #
 # JMAP directories use protocol = "jmap-contacts" or "jmap-calendars".
+
