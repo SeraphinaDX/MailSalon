@@ -1,12 +1,13 @@
-# MailSalon 0.5.0
+# MailSalon 0.5.1
 
 MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
 It deliberately leaves network transport to external programs. MailSalon reads
 and modifies local Maildirs, while tools such as `mbsync`, `offlineimap`,
 `MailSalonSync`, `msmtp`, or custom wrapper scripts handle receiving and sending.
 
-Contacts and calendar items now have their own TUI views: **1 Mail**, **2
-Contacts**, **3 Calendar**. MailSalon reads CardDAV/CalDAV files and native JMAP
+A highlighted view bar across the top shows **1 Mail**, **2 Contacts**, and
+**3 Calendar**. Press those keys or click a view to switch while keeping the
+selected account. MailSalon reads CardDAV/CalDAV files and native JMAP
 JSON objects synchronized by MailSalonSync. See the
 [contacts and calendars guide](docs/contacts-calendar.md) for configuration,
 creation, editing, deletion, and the current calendar-view limits.
@@ -51,7 +52,10 @@ account selector, or use the mouse wheel over it to switch accounts.
 ## Features
 
 - Local Maildir reader with `new`, `cur`, and Maildir flags.
+- Clickable Mail/Contacts/Calendar view bar with the active view highlighted.
 - Account-associated address books and calendars, local search and previews.
+  Shared collections are labeled explicitly; associate each account’s own
+  collection with its `account` name to keep the accounts separate.
 - Contact/event creation forms, full-source editing, and recoverable local deletion.
 - Compose mail directly to a selected contact.
 - Multiple accounts, each with its own Maildir, identity, transport commands,
