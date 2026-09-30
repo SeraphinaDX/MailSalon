@@ -1613,24 +1613,47 @@ func (a *App) highlightComposeField() {
 	c := a.compose
 	inactive := ui.NewStyle(a.theme.border, a.theme.background)
 	active := ui.NewStyle(a.theme.activeBorder, a.theme.background)
+	cursor := ui.NewStyle(a.theme.cursorFG, a.theme.cursorBG)
+
+	// gotui's single-line Input widget always draws a cursor. Make the cursor
+	// visually disappear on inactive fields by giving it the field's normal
+	// text style, then restore the configured cursor style only for the field
+	// that currently owns compose focus.
 	c.from.BorderStyle = inactive
 	for _, w := range []*widgets.Input{c.to, c.cc, c.bcc, c.subject} {
 		w.BorderStyle = inactive
+		w.CursorStyle = w.TextStyle
 	}
 	c.body.BorderStyle = inactive
+	c.body.ShowCursor = false
+	c.attachPrompt.BorderStyle = inactive
+
+	// The attachment prompt temporarily owns focus while it is visible, so do
+	// not leave a second cursor behind in the underlying compose form.
+	if c.attachPrompt.TitleBottom == "active" {
+		c.attachPrompt.BorderStyle = active
+		c.attachPrompt.CursorStyle = cursor
+		return
+	}
+
 	switch c.field {
 	case composeFrom:
 		c.from.BorderStyle = active
 	case composeTo:
 		c.to.BorderStyle = active
+		c.to.CursorStyle = cursor
 	case composeCc:
 		c.cc.BorderStyle = active
+		c.cc.CursorStyle = cursor
 	case composeBcc:
 		c.bcc.BorderStyle = active
+		c.bcc.CursorStyle = cursor
 	case composeSubject:
 		c.subject.BorderStyle = active
+		c.subject.CursorStyle = cursor
 	case composeBody:
 		c.body.BorderStyle = active
+		c.body.ShowCursor = true
 	}
 }
 
