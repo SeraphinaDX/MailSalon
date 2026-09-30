@@ -1,33 +1,36 @@
 # MailSalon configuration
-# Default location: ~/.config/mailsalon/config.toml
+# Default Linux location: ~/.config/mailsalon/config.toml
+# Quickstart: docs/quickstart.md. Reference: docs/configuration.md.
+# Replace the identity, Maildir and sync account name before use.
+# Transport credentials belong in your sync/sending tool configuration.
 #
 # Each [[accounts]] block is independent. MailSalon reads that account's
 # Maildir and uses that account's receive/send commands, identity, signature,
 # and optional OpenPGP settings.
 
 [[accounts]]
-name = "cerberus"
+name = "personal"
 maildir = "~/Maildir"
-from = "Britney Lozza <britney@cerberusgames.ca>"
-signature_file = "~/.signature"
+from = "Your Name <you@example.com>"
+# signature_file = "~/.signature"  # Optional; create the file before enabling.
 trash_folder = "Trash"
 # Matches a plain Archive Maildir or Maildir++ .Archive; no server role is required.
 archive_folder = "Archive"
 download_dir = "~/Downloads"
 receive = "MailSalonSync -plain sync"
-send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
+send = "MailSalonSync -plain jmap-send -account personal-jmap"
 
 # Optional OpenPGP/GnuPG support for this account. `command` is an executable
 # name or path, not an arbitrary shell command. Point it at a wrapper script if
 # you need custom GnuPG invocation behavior.
-[accounts.gpg]
-enabled = true
-command = "gpg"
+# [accounts.gpg]
+# enabled = true
+# command = "gpg"
 # homedir = "~/.gnupg"
-sign_key = "britney@cerberusgames.ca"
-auto_sign = false
-auto_encrypt = false
-encrypt_to_self = true
+# sign_key = "you@example.com"
+# auto_sign = false
+# auto_encrypt = false
+# encrypt_to_self = true
 
 # Example second account:
 # [[accounts]]
@@ -50,9 +53,9 @@ encrypt_to_self = true
 # encrypt_to_self = true
 
 [options]
-default_account = "cerberus"
+default_account = "personal"
 startup_sync = false
-# Opening a reply saves missing senders to the account’s first contact collection.
+# Opening a reply saves missing senders to an account contact book or shared fallback.
 # Set false to disable reply saving; contact autocomplete still works.
 auto_add_reply_contacts = true
 # Periodic background sync. Go duration syntax is supported: 30s, 5m, 1h.
@@ -63,6 +66,9 @@ sync_interval = "5m"
 # Optional keybindings. These are the defaults; omit any entry you do not want
 # to change. The on-screen legends use the configured values automatically.
 [keybindings]
+mail_view = "1"
+contacts_view = "2"
+calendar_view = "3"
 quit = "q"
 compose = "c"
 sync = "u"
@@ -115,13 +121,13 @@ cursor_bg = "#ff9ecb"
 # Omit account only for collections intentionally shared across accounts.
 # [[collections]]
 # name = "Personal contacts"
-# account = "cerberus"
+# account = "personal"
 # protocol = "carddav"
 # local_dir = "~/PIM/contacts/personal"
 #
 # [[collections]]
 # name = "Personal calendar"
-# account = "cerberus"
+# account = "personal"
 # protocol = "caldav"
 # local_dir = "~/PIM/calendars/personal"
 #

@@ -1,611 +1,94 @@
-# MailSalon 0.6.0
+# MailSalon
 
-MailSalon is a Maildir-based terminal mail client written in Go using gotui v5.
-It deliberately leaves network transport to external programs. MailSalon reads
-and modifies local Maildirs, while tools such as `mbsync`, `offlineimap`,
-`MailSalonSync`, `msmtp`, or custom wrapper scripts handle receiving and sending.
+MailSalon is a terminal app for email, contacts, and calendars, written in Go
+with gotui v5. Read your local mail, compose and reply, look up contacts, and
+manage calendar items using the keyboard or mouse.
 
-A highlighted view bar across the top shows **1 Mail**, **2 Contacts**, and
-**3 Calendar**. Press those keys or click a view to switch while keeping the
-selected account. MailSalon reads CardDAV/CalDAV files and native JMAP
-JSON objects synchronized by MailSalonSync. See the
-[contacts and calendars guide](docs/contacts-calendar.md) for configuration,
-creation, editing, deletion, and the current calendar-view limits.
+MailSalon works with local Maildirs and contact/calendar files.
+[MailSalonSync](https://github.com/SeraphinaDX/MailSalonSync) handles IMAP/JMAP
+mail and CardDAV, CalDAV, and JMAP contacts/calendars. You can also use `mbsync`,
+`offlineimap`, `msmtp`, or your own transport commands.
 
-## LLM Code Policy
-This project does not discriminate against the use of LLM generated code. The project already does contain LLM generated code. Just make sure the code compiles and does not introduce new bugs or cause it not to pass tests.
+**New here? Start with the [quickstart guide](docs/quickstart.md).** It walks
+through building MailSalon, connecting an existing mailbox, and sending your
+first message. Current version: **0.6.0**.
 
-This project also chose the language Go precisely for its memory safety because of those guardrails for LLM generated code.
+## Get started
 
-This code is daily driven by the author. All bugs are eliminated in a prompt manner by someone terminally online.
-
-## Design
-
-The folder pane stays on the left. The message list and preview are stacked on
-the right so the message list remains wide enough to keep sender, subject, and
-date/time visible.
-
-MailSalon supports multiple independent accounts. A dedicated account selector
-is always visible above the folder pane. It shows the active account and its
-position, for example `Account 1/2` and `‹ cerberus ›`. Press `A`, click the
-account selector, or use the mouse wheel over it to switch accounts.
-
-```text
-┌─ Account 1/2 ────────┐┌─ Messages ──────────────────────────────────────────┐
-│ ‹ cerberus ›         ││ ●  From             Subject                  Date  │
-├─ A/Click switch ─────┤│    Alice Example    Plans for Friday        14:32 │
-┌─ Update Mail ────────┐│ ●  Bob Example      Re: project             13:08 │
-│ ↻ Update             │├─ Message ───────────────────────────────────────────┤
-├─ u/Click update ─────┤│ From: Alice Example <alice@example.com>            │
-┌─ Folders ────────────┐│ To: britney@cerberusgames.ca                       │
-│ INBOX                ││ Subject: Plans for Friday                          │
-│ Archive              ││                                                    │
-│ Drafts               ││ Message body...                                    │
-│ Sent                 ││                                                    │
-│ Trash                │├─ j/k Scroll  r Reply  f Fwd  m Read/Unread / Search ┤
-└──────────────────────┘└────────────────────────────────────────────────────┘
- [cerberus] Ready
- c Compose  u Sync  r Reply  f Forward  e Archive  m Read/unread  / Search
- d Delete  a Save attachments  A Switch account  Tab Focus  j/k Move  Enter Open  R Refresh  q Quit
-```
-
-## Features
-
-- Local Maildir reader with `new`, `cur`, and Maildir flags.
-- Clickable Mail/Contacts/Calendar view bar with the active view highlighted.
-- Account-associated address books and calendars, local search and previews.
-  Shared collections are labeled explicitly; associate each account’s own
-  collection with its `account` name to keep the accounts separate.
-- Contact/event creation forms, full-source editing, and recoverable local deletion.
-- Compose mail directly to a selected contact.
-- Multiple accounts, each with its own Maildir, identity, transport commands,
-  signature file, Trash folder, and download directory.
-- INBOX, Maildir++ folders such as `.Sent`, and nested Maildirs.
-- Left-side folder navigation.
-- Wide From / Subject / Date message table.
-- Plain-text message preview. HTML-only messages are converted to readable terminal text, preserving paragraphs, lists, and useful link destinations while discarding scripts/styles.
-- Contextual keybind hints are displayed directly on the message-preview pane and are generated from the configured keybindings.
-- Manual read/unread toggle using the Maildir `S` (Seen) flag.
-- Case-insensitive search within the current folder across sender, recipients,
-  subject, date, Message-ID, and message body.
-- New message composition with separate To, Cc, and Bcc fields. Each field accepts multiple comma-separated RFC-style addresses.
-- Contact autocomplete in To/Cc/Bcc, scoped to the compose account and shared address books, including secondary email addresses.
-- Save missing reply senders as contacts automatically (enabled by default, configurable in TOML).
-- Text selection in every editable field with Shift+arrows, mouse dragging, and Alt+A select all. Typing/pasting replaces the selection; Backspace/Delete removes it.
-- Reply with `In-Reply-To`, `References`, and quoted original text.
-- Selectable **Reply from** account in the compose UI.
-- Automatic reply-account selection when a message's To/Cc address matches a
-  configured account.
-- Forward messages, including their original attachments.
-- Add multiple outgoing attachments by file path.
-- Save incoming attachments to the active account's download directory.
-- Per-account signature files. Signatures are read when the message is sent,
-  so changing a signature file does not require restarting MailSalon.
-- Optional per-account OpenPGP/GnuPG support using standard PGP/MIME: sign,
-  encrypt, or sign+encrypt complete MIME messages including attachments.
-- Automatic PGP/MIME decryption and detached-signature verification when a
-  protected message is opened; the preview displays the security result.
-- Archive to the active account's configured Archive folder when that Maildir exists.
-- Delete to the active account's configured Trash folder; deletion is confirmed
-  with a second press of the configured delete key.
-- Generic external receive command per account.
-- Automatic periodic background receive with a TOML-configurable interval. Identical receive commands shared by multiple accounts are run only once per cycle.
-- Generic external send command per account. MailSalon writes the complete RFC
-  5322/MIME message to the command's standard input.
-- Mouse selection and mouse-wheel scrolling.
-- TOML-configurable keybindings for mail actions, navigation, and compose actions.
-- Persistent on-screen key hints generated from the active keybindings, including a mode-aware legend while composing, replying, or forwarding.
-- TOML-configurable truecolor UI themes, including pane backgrounds, borders, active focus, titles, selections, unread mail, account identity, status/error text, and compose cursors.
-- Always-visible account selector and Update Mail control above the folder list with keyboard and mouse hints.
-- Keyboard-only operation remains fully supported.
-
-## Requirements
-
-- Go 1.24 or newer.
-- `github.com/metaspartan/gotui/v5`.
-- One or more Maildirs.
-- Optional external receive program such as `mbsync`, `offlineimap`, or
-  MailSalonSync.
-- An external sender such as `msmtp`, MailSalonSync JMAP submission, or your
-  own compatible command.
-- Optional `gpg`/GnuPG installation when OpenPGP support is enabled.
-
-## Build
+With Go 1.24 or newer and Git installed:
 
 ```sh
+git clone https://github.com/SeraphinaDX/MailSalon.git
+cd MailSalon
 go build -o MailSalon ./cmd/MailSalon
+mkdir -p ~/.config/mailsalon
+cp -i config.toml.example ~/.config/mailsalon/config.toml
 ```
 
-Run it with the default configuration path:
+Edit `~/.config/mailsalon/config.toml`: set your name/email, the Maildir populated
+by your sync tool, and your receive/send commands. The example uses
+MailSalonSync and a placeholder sync account named `personal-jmap`; replace it
+with your own. Configure and run the sync tool first, as described in the
+[quickstart](docs/quickstart.md#1-prepare-your-mailbox).
 
 ```sh
 ./MailSalon
 ```
 
-Or choose a configuration explicitly:
+Already have a configuration? Keep it and run `./MailSalon` directly. Use
+`./MailSalon -config=./config.toml` to try a different file.
 
-```sh
-./MailSalon -config=./config.toml
-```
+## Everyday controls
 
-To suppress a configured startup synchronization for one run:
+The top bar shows **1 Mail**, **2 Contacts**, and **3 Calendar**. Press a number
+or click a tab. Folders or collections stay on the left; the item list and
+preview are on the right. The on-screen hints show your current keybindings.
 
-```sh
-./MailSalon -no-startup-sync
-```
-
-## Configuration
-
-The default configuration path is:
-
-```text
-~/.config/mailsalon/config.toml
-```
-
-Accounts are TOML array-of-table entries. Each account is intentionally
-self-contained so selecting another identity also selects the correct Maildir,
-send command, sync command, signature, Trash folder, and attachment directory.
-
-Example for `britney@cerberusgames.ca`:
-
-```toml
-[[accounts]]
-name = "cerberus"
-maildir = "~/Maildir"
-from = "Britney Lozza <britney@cerberusgames.ca>"
-signature_file = "~/.signature"
-trash_folder = "Trash"
-archive_folder = "Archive"
-download_dir = "~/Downloads"
-receive = "MailSalonSync -plain sync"
-send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
-
-[accounts.gpg]
-enabled = true
-command = "gpg"
-sign_key = "britney@cerberusgames.ca"
-auto_sign = false
-auto_encrypt = false
-encrypt_to_self = true
-
-[options]
-default_account = "cerberus"
-startup_sync = false
-sync_interval = "5m"
-```
-
-### Multiple accounts
-
-Add another `[[accounts]]` block:
-
-```toml
-[[accounts]]
-name = "cerberus"
-maildir = "~/Maildir"
-from = "Britney Lozza <britney@cerberusgames.ca>"
-signature_file = "~/.signature"
-trash_folder = "Trash"
-archive_folder = "Archive"
-download_dir = "~/Downloads"
-receive = "MailSalonSync -plain sync"
-send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
-
-[[accounts]]
-name = "work"
-maildir = "~/Maildir-work"
-from = "Britney Lozza <britney@work.example>"
-signature_file = "~/.signature-work"
-trash_folder = "Trash"
-archive_folder = "Archive"
-download_dir = "~/Downloads"
-receive = "mbsync work"
-send = "msmtp -a work -t"
-
-[options]
-default_account = "cerberus"
-startup_sync = false
-sync_interval = "5m"
-```
-
-Account names must be unique. `default_account` chooses the mailbox shown when
-MailSalon starts.
-
-The earlier single-account `[mail]`, `[identity]`, and `[commands]` format is
-still accepted for compatibility, but `[[accounts]]` is the recommended format.
-
-### Automatic periodic sync
-
-MailSalon automatically runs configured receive commands every five minutes by default. Change the cadence under `[options]` using Go duration syntax:
-
-```toml
-[options]
-sync_interval = "10m"
-```
-
-Examples include `"30s"`, `"5m"`, and `"1h"`. Set `sync_interval = "0"` to disable periodic syncing entirely.
-
-Periodic sync runs receive commands in the background so composing, replying, and searching remain usable while mail is being fetched. If multiple accounts have the exact same receive command, MailSalon runs that command once per cycle instead of launching duplicates. After the cycle finishes, the active Maildir is rescanned and the UI is refreshed.
-
-The existing `startup_sync` option remains separate: it controls the one-time sync when MailSalon starts, while `sync_interval` controls recurring syncs after startup. Manual `u` sync still applies to the active account.
-
-### Keybindings
-
-MailSalon action keys can be changed in `config.toml`. The main-view, message-preview, and compose legends are generated from these values, so the UI always shows the keys that are actually active. Single-character bindings are case-sensitive (`a` and `A` are different). Named keys use friendly names such as `Tab`, `Shift+Tab`, `Enter`, `Esc`, `PgUp`, and `PgDn`. `Ctrl+X`-style bindings are supported for single-character control combinations.
-
-```toml
-[keybindings]
-quit = "q"
-compose = "c"
-sync = "u"
-reply = "r"
-forward = "f"
-archive = "e"
-toggle_read = "m"
-search = "/"
-delete = "d"
-save_attachments = "a"
-switch_account = "A"
-refresh = "R"
-
-focus_next = "Tab"
-focus_left = "h"
-focus_right = "l"
-move_up = "k"
-move_down = "j"
-page_up = "PgUp"
-page_down = "PgDn"
-home = "Home"
-end = "End"
-open = "Enter"
-
-send = "Ctrl+S"
-attach = "Ctrl+A"
-pgp_mode = "Ctrl+G"
-cancel = "Esc"
-next_field = "Tab"
-previous_field = "Shift+Tab"
-```
-
-Duplicate bindings within the same UI mode are rejected at startup instead of making one action silently unreachable. Mouse controls are unchanged by keyboard remapping.
-
-### Contact autocomplete and saving reply senders
-
-Type a name or part of an email address in To, Cc, or Bcc to see matching local
-contacts. Use Up/Down to choose, then Enter, Tab, or a mouse click to insert the
-address. Tab accepts a suggestion first; the next Tab moves to the next field.
-Esc closes the suggestions before cancelling the composer. Comma-separated
-recipients and quoted names containing commas are preserved. Autocomplete reads
-all email addresses, including aliases, from the compose account's address books
-and shared books. Changing the From account reloads its contacts.
-
-Starting a reply saves the sender locally if that email address is missing from
-those books. It checks aliases case-insensitively and preserves existing contact
-records. The first contact collection associated with the reply's From account
-is the destination; if there is none, the first shared contact collection is
-used. This happens when the reply opens, even if you later cancel the draft.
-Forwarding and new messages do not save senders. A configured contact collection
-is required; errors saving a contact are shown without preventing the reply.
-Normal MailSalonSync syncing uploads the new contact.
-
-To turn off saving reply senders, add this inside your existing `[options]`
-section (autocomplete remains available):
-
-```toml
-auto_add_reply_contacts = false
-```
-
-The default is `true`; existing configs enable it automatically.
-
-### Selecting text while editing
-
-Text selection works in To/Cc/Bcc/Subject, the message body, search, attachment
-paths, contact/calendar creation fields, and the full-source editor. Selection
-uses your theme's `selected_fg` and `selected_bg` colors.
-
-| Key or action | Behavior |
+| Action | Default control |
 | --- | --- |
-| Shift+Left/Right | Extend or shrink the selection by a character |
-| Shift+Up/Down | Extend the selection across lines in a multiline editor |
-| Shift+Home/End | Select to the start/end of the current line |
-| Ctrl+Shift+Home/End | Select to the start/end of the entire text |
-| Alt+A | Select all text in the current editable field |
-| Ctrl+Space, then arrows | Start a keyboard selection; Ctrl+Space again clears it |
-| Left mouse drag | Select text; a click places the cursor |
-| Type or terminal paste | Replace the selected text |
-| Backspace/Delete | Remove the selected text |
-| Left/Right without Shift | Collapse the selection to its start/end |
+| Switch view | `1`, `2`, `3`, or click a tab |
+| Switch account | `A`, or click/wheel over the account selector |
+| Navigate | Arrow keys, `j` / `k`, mouse click or wheel |
+| Change pane | `Tab` |
+| Compose / reply / forward | `c` / `r` / `f` in Mail |
+| Sync / reload local files | `u` / `R` |
+| Search | `/` |
+| Send a message / save a contact or event | `Ctrl+S` in the editor |
+| Quit | `q` or `Ctrl+C` |
 
-Ctrl+A continues to attach a file in the composer. It also selects all in
-editors where it has no configured action, such as search and the attachment
-path prompt. Existing configured actions take precedence. Ctrl+C retains its
-quit behavior. Selection edits the local field; it does not copy to the system
-clipboard. Use Ctrl+Space if your terminal intercepts Shift+arrow shortcuts.
+## What you can do
 
-The From/Reply from field selects an account identity and is not a text editor.
-Raw contact/calendar source scrolls horizontally without adding wrap newlines.
+- Use multiple accounts with separate mailboxes, identities, signatures, and
+  transport commands.
+- Read plain text and HTML mail, search folders, mark mail read/unread, archive,
+  and delete with confirmation.
+- Compose with To/Cc/Bcc, attachments, contact suggestions, and automatic reply
+  account selection. Missing reply senders are saved as contacts by default
+  when a contact collection is configured; this can be disabled.
+- Browse, search, create, and edit contacts and calendar items. Bind collections
+  to an account or explicitly share them across accounts.
+- Sync manually or on a configurable background timer.
+- Select text in editable fields and customize keys and colors.
+- Sign, encrypt, decrypt, and verify PGP/MIME mail with optional GnuPG support.
 
-### Themes
+Calendar browsing currently uses an item list and source preview. Recurrence
+data is preserved, but there is no month/week grid, expanded recurring agenda,
+reminder notification, or invitation/RSVP workflow yet. See
+[contacts and calendars](docs/contacts-calendar.md#calendar-view).
 
-The UI can be themed directly in `config.toml` with an optional `[theme]`
-section. MailSalon supports 24-bit `#RRGGBB` colors as well as common color
-names such as `red`, `cyan`, `pink`, `grey`, `skyblue`, and `default`.
-Omitted theme values use the built-in defaults.
+## Documentation
 
-```toml
-[theme]
-background = "#090d16"
-foreground = "#d8dee9"
-muted = "#77839a"
-border = "#36506b"
-active_border = "#64d8cb"
-title = "#ff9ecb"
-selected_fg = "#071018"
-selected_bg = "#ff9ecb"
-account = "#d9a7ff"
-unread = "#f6c177"
-status = "#64d8cb"
-error = "#ff6b81"
-cursor_fg = "#071018"
-cursor_bg = "#ff9ecb"
-```
-
-The theme roles are intentionally semantic:
-
-- `background` and `foreground` control the normal pane background/text.
-- `border` is the normal pane border; `active_border` marks the focused pane.
-- `title` colors pane titles and the account selector border.
-- `muted` is used for secondary UI text such as pane-bottom key hints and the
-  message-table header.
-- `selected_fg` / `selected_bg` style selected folders and messages.
-- `account` highlights the currently selected account and From/Reply from row.
-- `unread` colors unread message rows.
-- `status` colors normal footer status text; `error` is used for failures.
-- `cursor_fg` / `cursor_bg` control the compose cursor.
-
-Use `background = "default"` if you prefer MailSalon to inherit the terminal's
-normal background instead of painting its own color.
-
-### Signatures
-
-`signature_file` is optional and is configured per account:
-
-```toml
-signature_file = "~/.signature"
-```
-
-MailSalon reads the file at send time. If the file already starts with the
-standard `-- ` signature separator, MailSalon preserves it. Otherwise MailSalon
-adds the separator automatically. For replies and forwards, the signature is
-placed before the quoted/forwarded original message.
-
-### OpenPGP / GnuPG
-
-OpenPGP is optional and configured independently for each account. MailSalon
-uses the user's existing GnuPG keyring; it does not maintain its own key store.
-The `command` setting is an executable name/path rather than a shell command.
-If custom GnuPG arguments are required, point it at a wrapper script.
-
-```toml
-[[accounts]]
-name = "cerberus"
-maildir = "~/Maildir"
-from = "Britney Lozza <britney@cerberusgames.ca>"
-send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
-
-[accounts.gpg]
-enabled = true
-command = "gpg"
-# homedir = "~/.gnupg"
-sign_key = "britney@cerberusgames.ca"
-auto_sign = false
-auto_encrypt = false
-encrypt_to_self = true
-```
-
-Settings:
-
-- `enabled` enables GPG integration for the account.
-- `command` defaults to `gpg` and may be an executable path/name.
-- `homedir` optionally selects a different GnuPG home/keyring.
-- `sign_key` selects the signing key by email, fingerprint, or key ID. When it
-  is omitted, MailSalon tries the account's `From` address.
-- `auto_sign` and `auto_encrypt` select the initial mode in the compose UI.
-- `encrypt_to_self` defaults to `true` so the sender can normally decrypt mail
-  from the Sent folder later.
-
-In Compose/Reply/Forward, press `Ctrl+G` to cycle:
-
-```text
-Off -> Sign -> Encrypt -> Sign+Encrypt -> Off
-```
-
-Signing and encryption use PGP/MIME rather than inline armored text. When both
-are enabled, MailSalon signs the complete MIME entity first and then encrypts
-it, so message text and attachments are protected together. All To/Cc
-recipients are passed to GnuPG as normal recipients; Bcc recipients use GnuPG's
-hidden-recipient mode so their key IDs are not deliberately exposed as normal
-recipient packets.
-
-Encryption is fail-closed. If GnuPG cannot find or trust a required recipient
-key, MailSalon reports the error and does **not** fall back to sending the
-message in plaintext.
-
-When opening PGP/MIME mail, MailSalon automatically attempts decryption and
-signature verification using the active account's GnuPG settings. The message
-preview displays a line such as:
-
-```text
-OpenPGP: encrypted/decrypted; good signature from Alice <alice@example.com>
-```
-
-A bad or unverifiable signature is shown explicitly. If OpenPGP is disabled or
-the private key is unavailable, MailSalon leaves encrypted content protected
-and displays the decryption error instead of pretending it is readable.
-
-As with normal PGP/MIME, envelope/message headers such as From, To, Date, and
-Subject remain outside the encrypted MIME body. OpenPGP protects the MIME
-content and attachments, not those outer headers.
-
-GnuPG may use `gpg-agent`/pinentry when a private key requires a passphrase.
-Keys that are already unlocked in the agent provide the smoothest TUI
-experience.
-
-### Receiving mail
-
-`receive` is intentionally generic. Manual sync executes the active account's configured command with `/bin/sh -c`, waits for it to finish, and rescans that account's Maildir. Periodic sync runs the configured receive commands in the background and deduplicates identical command strings before rescanning the active Maildir.
-
-Examples:
-
-```toml
-receive = "mbsync work"
-```
-
-```toml
-receive = "offlineimap"
-```
-
-```toml
-receive = "MailSalonSync -plain sync"
-```
-
-A wrapper script works too:
-
-```toml
-receive = "~/bin/sync-my-mail"
-```
-
-### Sending mail
-
-`send` receives the entire generated RFC 5322/MIME message on standard input.
-For msmtp:
-
-```toml
-send = "msmtp -t"
-```
-
-For MailSalonSync JMAP submission:
-
-```toml
-send = "MailSalonSync -plain jmap-send -account cerberus-jmap"
-```
-
-A custom wrapper is equally valid:
-
-```toml
-send = "~/bin/mail-send-wrapper"
-```
-
-The selected From/Reply from account determines both the `From:` header and the
-send command. This prevents selecting one identity while accidentally using a
-different account's transport configuration.
-
-## Keyboard controls
-
-The tables below show the defaults. Any configurable entry is reflected automatically in the on-screen legend after remapping it under `[keybindings]`.
-
-### Mail view
-
-| Key | Action |
+| Guide | Use it for |
 | --- | --- |
-| `A` | Switch to the next configured account; the account selector is always visible above Folders |
-| `Tab` | Cycle Folders → Messages → Preview |
-| `h` / Left | Move focus toward folders |
-| `l` / Right | Move focus toward messages/preview |
-| `j` / Down | Move selection or scroll preview |
-| `k` / Up | Move selection or scroll preview |
-| `PageUp` / `PageDown` | Page through the active pane |
-| `Home` / `End` | Jump to beginning/end |
-| `Enter` | Open selected folder/message |
-| `c` | Compose a new message |
-| `u` | Sync: run the active account's receive command and rescan |
-| `r` | Reply |
-| `f` | Forward |
-| `e` | Archive the selected message when the configured Archive folder exists |
-| `m` | Toggle the selected message between read and unread |
-| `/` | Search the current folder; submit an empty search to clear the filter |
-| `d`, then `d` | Delete / confirm delete |
-| `a` | Save all attachments from the selected message |
-| `R` | Rescan the active Maildir without running a receive command |
-| `q` / `Ctrl+C` | Quit |
+| [Quickstart](docs/quickstart.md) | Install, configure one account, read and send mail |
+| [Configuration](docs/configuration.md) | Accounts, sync interval, signatures, keys, themes, and command-line flags |
+| [Using MailSalon](docs/usage.md) | Keyboard/mouse controls, composing, selecting text, and Maildir behavior |
+| [Contacts and calendars](docs/contacts-calendar.md) | Collections, autocomplete, reply contact saving, and local editing |
+| [OpenPGP](docs/openpgp.md) | Optional signing, encryption, keyring settings, and verification |
+| [Troubleshooting](docs/troubleshooting.md) | Empty mailboxes, command failures, configuration errors, and sync issues |
+| [Development](docs/development.md) | Build, tests, project structure, and contribution policy |
+| [Example configuration](config.toml.example) | Annotated settings to copy and adapt |
 
-### Compose / reply / forward view
-
-The first row is `From` for new messages and forwards, or `Reply from` for
-replies. It displays the account name, email identity, and configured signature
-file. A four-line legend remains visible at the bottom of the screen, labels
-the current mode as `Compose`, `Reply`, or `Forward`, and shows the current
-OpenPGP mode.
-
-New messages and forwards initially focus the `To` field. Replies initially
-focus the message body so you can start typing above the quoted original text.
-
-`To`, `Cc`, and `Bcc` each accept multiple comma-separated addresses, including
-display-name forms such as `Alice <alice@example.com>, Bob <bob@example.com>`.
-MailSalon validates each address list before invoking the external send command
-and identifies the bad field if parsing fails.
-
-| Key | Action |
-| --- | --- |
-| `Tab` | Next field |
-| `Shift+Tab` | Previous field |
-| Left / Right while From is selected | Select sending account |
-| `h` / `l`, `j` / `k`, or Enter on From | Change sending account |
-| `Ctrl+A` | Add an attachment by file path |
-| `Ctrl+G` | Cycle OpenPGP mode: Off → Sign → Encrypt → Sign+Encrypt |
-| `Ctrl+S` | Build/protect the MIME message and run the selected account's send command |
-| `Esc` | Cancel composition |
-| Arrow keys | Move the cursor in normal input/body fields |
-
-## Mouse controls
-
-- Click a folder to open it.
-- Click the dedicated Account selector above Folders to switch to the next account.
-- Click the **Update Mail** control to run the active account's receive command and rescan the Maildir.
-- Use the mouse wheel over the Account selector to switch backward/forward.
-- Click a message to select and preview it.
-- Click the preview pane to focus it.
-- Use the mouse wheel over folders, messages, or the preview to scroll.
-- Click the From/Reply from row to cycle the sending account.
-- Use the mouse wheel over the From/Reply from row to cycle backward/forward.
-- Compose fields can be focused with the mouse.
-
-## Maildir behavior
-
-Each account can point either at an INBOX Maildir itself or at a Maildir container that contains an `INBOX` child. MailSalon discovers Maildir++ folders such as `.Trash` and ordinary nested Maildirs without manufacturing a duplicate INBOX.
-Messages in `new` or without the `S` flag are displayed as unread. Opening a
-message moves it from `new` to `cur` when necessary and adds the `S` (seen)
-flag. This also works for unread messages that a sync tool has already placed
-in `cur`. Press `m` to manually remove/add the Seen flag and mark a message
-unread/read.
-
-Press `/` to search the currently open folder. Search is case-insensitive and
-checks From, To, Cc, Subject, Date, Message-ID, and the rendered plain-text
-body. When OpenPGP is enabled for the active account, encrypted message bodies
-are decrypted as needed for body searching. Press Enter to apply the filter,
-Escape to cancel the prompt, or submit an empty search to restore the full
-folder.
-
-Archiving uses the active account's configured `archive_folder` (default `Archive`). MailSalon only enables and advertises Archive when that Maildir is actually present; it does not create the folder automatically. A manually created ordinary Maildir named `Archive` works, as does a Maildir++ `.Archive` folder; no server-side Archive role is required. The move preserves the message's Maildir Seen/unread state so the external sync tool can propagate the move.
-
-Deletion uses the active account's configured Trash Maildir. If that folder is
-not present, MailSalon refuses to delete instead of guessing a path. Deleting a
-message already in Trash permanently removes the file.
-
-## Testing
-
-```sh
-go test ./...
-```
-
-The core packages include tests for configuration parsing, multi-account
-configuration, signature loading, Maildir discovery and movement, MIME
-construction/parsing with attachments, external command stdin/stdout handling,
-and a real GnuPG PGP/MIME sign+encrypt/decrypt+verify round-trip when `gpg` is
-available.
-
-## Current scope
-
-MailSalon is intentionally a Maildir MUA rather than an IMAP/JMAP client. It
-owns the local mail/user-interface behavior and delegates transport to whatever
-external tools the user chooses.
-
+MailSalon keeps transport credentials in your sync/sending tools' configuration.
+Its `receive` and `send` settings choose the commands to run.
+See [LICENSE](LICENSE) for licensing terms.
