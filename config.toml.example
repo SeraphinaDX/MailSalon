@@ -52,6 +52,9 @@ encrypt_to_self = true
 [options]
 default_account = "cerberus"
 startup_sync = false
+# Periodic background sync. Go duration syntax is supported: 30s, 5m, 1h.
+# Set to "0" to disable automatic periodic syncing.
+sync_interval = "5m"
 
 
 # Optional keybindings. These are the defaults; omit any entry you do not want
