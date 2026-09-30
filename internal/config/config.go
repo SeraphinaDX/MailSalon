@@ -38,6 +38,9 @@ type Account struct {
 }
 
 type Keybindings struct {
+	MailView        string
+	ContactsView    string
+	CalendarView    string
 	Quit            string
 	Compose         string
 	Sync            string
@@ -87,11 +90,21 @@ type Theme struct {
 
 type Config struct {
 	Accounts       []Account
+	Collections    []Collection
 	DefaultAccount string
 	StartupSync    bool
 	SyncInterval   time.Duration
 	Theme          Theme
 	Keybindings    Keybindings
+}
+
+// Collection reads the same directory configured in MailSalonSync. An empty
+// account makes the collection visible from every mail account.
+type Collection struct {
+	Name     string `toml:"name"`
+	Account  string `toml:"account"`
+	Protocol string `toml:"protocol"`
+	LocalDir string `toml:"local_dir"`
 }
 
 type fileGPG struct {
@@ -118,6 +131,9 @@ type fileAccount struct {
 }
 
 type fileKeybindings struct {
+	MailView        string `toml:"mail_view"`
+	ContactsView    string `toml:"contacts_view"`
+	CalendarView    string `toml:"calendar_view"`
 	Quit            string `toml:"quit"`
 	Compose         string `toml:"compose"`
 	Sync            string `toml:"sync"`
@@ -166,7 +182,8 @@ type fileTheme struct {
 }
 
 type fileConfig struct {
-	Accounts []fileAccount `toml:"accounts"`
+	Accounts    []fileAccount `toml:"accounts"`
+	Collections []Collection  `toml:"collections"`
 
 	// Legacy single-account sections remain readable so early MailSalon
 	// prototype configs do not suddenly stop working.
@@ -218,6 +235,7 @@ func DefaultTheme() Theme {
 
 func DefaultKeybindings() Keybindings {
 	return Keybindings{
+		MailView: "1", ContactsView: "2", CalendarView: "3",
 		Quit:            "q",
 		Compose:         "c",
 		Sync:            "u",
@@ -260,6 +278,9 @@ func KeybindingsWithDefaults(k Keybindings) Keybindings {
 		}
 	}
 	set(&d.Quit, k.Quit)
+	set(&d.MailView, k.MailView)
+	set(&d.ContactsView, k.ContactsView)
+	set(&d.CalendarView, k.CalendarView)
 	set(&d.Compose, k.Compose)
 	set(&d.Sync, k.Sync)
 	set(&d.Reply, k.Reply)
@@ -374,6 +395,23 @@ func Load(path string) (Config, error) {
 	if err := validateAccounts(cfg.Accounts); err != nil {
 		return cfg, err
 	}
+	seenCollections := map[string]bool{}
+	for _, c := range raw.Collections {
+		c.LocalDir = expandPath(c.LocalDir)
+		if c.Name == "" || c.LocalDir == "" || seenCollections[c.Name] {
+			return cfg, fmt.Errorf("collection requires a unique name and local_dir")
+		}
+		seenCollections[c.Name] = true
+		if c.Account != "" && cfg.AccountIndex(c.Account) < 0 {
+			return cfg, fmt.Errorf("collection %q: unknown account %q", c.Name, c.Account)
+		}
+		switch c.Protocol {
+		case "carddav", "caldav", "jmap-contacts", "jmap-calendars":
+		default:
+			return cfg, fmt.Errorf("collection %q: unsupported protocol %q", c.Name, c.Protocol)
+		}
+		cfg.Collections = append(cfg.Collections, c)
+	}
 	if err := validateTheme(cfg.Theme); err != nil {
 		return cfg, err
 	}
@@ -449,6 +487,9 @@ func mergeKeybindings(base Keybindings, raw fileKeybindings) Keybindings {
 		}
 	}
 	set(&base.Quit, raw.Quit)
+	set(&base.MailView, raw.MailView)
+	set(&base.ContactsView, raw.ContactsView)
+	set(&base.CalendarView, raw.CalendarView)
 	set(&base.Compose, raw.Compose)
 	set(&base.Sync, raw.Sync)
 	set(&base.Reply, raw.Reply)
@@ -481,6 +522,7 @@ func mergeKeybindings(base Keybindings, raw fileKeybindings) Keybindings {
 
 func validateKeybindings(k Keybindings) error {
 	main := map[string]string{
+		"mail_view": k.MailView, "contacts_view": k.ContactsView, "calendar_view": k.CalendarView,
 		"quit": k.Quit, "compose": k.Compose, "sync": k.Sync, "reply": k.Reply,
 		"forward": k.Forward, "archive": k.Archive, "toggle_read": k.ToggleRead,
 		"search": k.Search, "delete": k.Delete, "save_attachments": k.SaveAttachments,
