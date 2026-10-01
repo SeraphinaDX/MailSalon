@@ -1,5 +1,11 @@
 # MailSalon
 
+# NEW REPO
+
+MailSalon is now part of [MailSalonGUI](https://github.com/SeraphinaDX/MailSalonGUI)
+
+# Old Info:
+
 MailSalon is a terminal app for email, contacts, and calendars, written in Go
 with gotui v5. Read your local mail, compose and reply, look up contacts, and
 manage calendar items using the keyboard or mouse.
