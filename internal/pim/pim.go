@@ -149,6 +149,9 @@ func Parse(c config.Collection, data []byte) (Item, error) {
 				continue
 			}
 			if key == "UID" {
+				if !Contacts(c) {
+					value = unescape(value)
+				}
 				if i.UID != "" && i.UID != value {
 					return i, errors.New("split multiple UIDs into individual files")
 				}

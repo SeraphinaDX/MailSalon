@@ -51,6 +51,7 @@ type Keybindings struct {
 	Search          string
 	Delete          string
 	SaveAttachments string
+	ImportCalendar  string
 	SwitchAccount   string
 	Refresh         string
 	FocusNext       string
@@ -145,6 +146,7 @@ type fileKeybindings struct {
 	Search          string `toml:"search"`
 	Delete          string `toml:"delete"`
 	SaveAttachments string `toml:"save_attachments"`
+	ImportCalendar  string `toml:"import_calendar"`
 	SwitchAccount   string `toml:"switch_account"`
 	Refresh         string `toml:"refresh"`
 	FocusNext       string `toml:"focus_next"`
@@ -248,6 +250,7 @@ func DefaultKeybindings() Keybindings {
 		Search:          "/",
 		Delete:          "d",
 		SaveAttachments: "a",
+		ImportCalendar:  "i",
 		SwitchAccount:   "A",
 		Refresh:         "R",
 		FocusNext:       "Tab",
@@ -292,6 +295,7 @@ func KeybindingsWithDefaults(k Keybindings) Keybindings {
 	set(&d.Search, k.Search)
 	set(&d.Delete, k.Delete)
 	set(&d.SaveAttachments, k.SaveAttachments)
+	set(&d.ImportCalendar, k.ImportCalendar)
 	set(&d.SwitchAccount, k.SwitchAccount)
 	set(&d.Refresh, k.Refresh)
 	set(&d.FocusNext, k.FocusNext)
@@ -505,6 +509,7 @@ func mergeKeybindings(base Keybindings, raw fileKeybindings) Keybindings {
 	set(&base.Search, raw.Search)
 	set(&base.Delete, raw.Delete)
 	set(&base.SaveAttachments, raw.SaveAttachments)
+	set(&base.ImportCalendar, raw.ImportCalendar)
 	set(&base.SwitchAccount, raw.SwitchAccount)
 	set(&base.Refresh, raw.Refresh)
 	set(&base.FocusNext, raw.FocusNext)
@@ -531,7 +536,7 @@ func validateKeybindings(k Keybindings) error {
 		"mail_view": k.MailView, "contacts_view": k.ContactsView, "calendar_view": k.CalendarView,
 		"quit": k.Quit, "compose": k.Compose, "sync": k.Sync, "reply": k.Reply,
 		"forward": k.Forward, "archive": k.Archive, "toggle_read": k.ToggleRead,
-		"search": k.Search, "delete": k.Delete, "save_attachments": k.SaveAttachments,
+		"search": k.Search, "delete": k.Delete, "save_attachments": k.SaveAttachments, "import_calendar": k.ImportCalendar,
 		"switch_account": k.SwitchAccount, "refresh": k.Refresh, "focus_next": k.FocusNext,
 		"focus_left": k.FocusLeft, "focus_right": k.FocusRight, "move_up": k.MoveUp,
 		"move_down": k.MoveDown, "page_up": k.PageUp, "page_down": k.PageDown,

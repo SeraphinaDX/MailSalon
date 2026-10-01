@@ -27,6 +27,7 @@ The tables below show the defaults. Any configurable entry is reflected automati
 | `/` | Search the current folder; submit an empty search to clear the filter |
 | `d`, then `d` | Delete / confirm delete |
 | `a` | Save all attachments from the selected message |
+| `i` | Review incoming calendar events and choose a calendar to add one |
 | `R` | Rescan the active Maildir without running a receive command |
 | `q` / `Ctrl+C` | Quit |
 
@@ -57,6 +58,23 @@ and identifies the bad field if parsing fails.
 | `Ctrl+S` | Build/protect the MIME message and run the selected account's send command |
 | `Esc` | Close suggestions first, otherwise cancel composition |
 | Arrow keys | Move the cursor in normal input/body fields |
+
+## Calendar attachments and invitations
+
+Calendar attachments (`.ics`, `text/calendar`, and common calendar MIME types)
+and inline calendar parts without a filename are detected when a message is
+opened. Event details appear in the preview. Press `i`, or click the **Calendar
+attachment** button, to choose an event and destination. Use Tab/Left/Right to
+choose a list and Up/Down to select. Click or Tab to the details pane and use arrows or the mouse wheel
+to scroll long descriptions. Press Ctrl+S/Enter or click **Add to
+calendar**; Esc returns to mail. The selected account's calendars and explicitly
+shared calendars are available.
+
+Import saves locally and uploads on the next sync. Repeating an import keeps an
+existing UID unchanged. This does not accept/decline or send an RSVP. See
+[calendar import formats and limits](contacts-calendar.md#incoming-calendar-attachments)
+for CalDAV/JMAP behavior. `a` still saves the original attachment, including
+malformed calendar files that cannot be previewed.
 
 ## Contact suggestions
 

@@ -82,6 +82,41 @@ auto_add_reply_contacts = false
 
 Autocomplete still works when automatic contact saving is disabled.
 
+## Incoming calendar attachments
+
+MailSalon detects `.ics` attachments and calendar MIME parts, including inline
+invitations with no filename. Mail previews show titles, start/end or duration,
+time zone or floating/all-day status, location, organizer, attendees, and
+notes. Multiple event UIDs appear separately; recurrence exceptions stay with
+their master. Invalid calendars show a readable error and remain downloadable
+with `a`, without preventing the rest of the email from opening.
+
+In Mail, press `i` or click **Calendar attachment** to review the events. Choose
+an event and an account-associated or shared destination calendar, then press
+Ctrl+S/Enter or click **Add to calendar**. Import is explicit and remains local
+until the next sync. Matching UIDs are left unchanged; this does not overwrite
+an existing event with an emailed update. The setting `[keybindings]
+import_calendar = "i"` changes the shortcut.
+
+- **CalDAV:** writes one iCalendar resource per UID, retaining recurrence rules,
+  exceptions, time-zone definitions, alarms, and other native properties. The
+  email's scheduling METHOD is removed for storage, and server scheduling is
+  disabled on the imported copy's organizer/attendee properties.
+- **JMAP calendars:** writes native JSCalendar for supported ordinary events,
+  retaining UID, title, time, duration, IANA zone/UTC/floating/all-day status,
+  location, description, standard organizer/attendee details, and supported
+  metadata. Participant scheduling agents are set to `none`. Recurrences,
+  alarms, unsupported properties/parameters, and time zones that cannot be
+  resolved as IANA zones require a CalDAV destination. The picker explains
+  these limitations before import; it does not silently discard unsupported
+  event data. The original `.ics` remains available in the email.
+
+Calendar import is a local copy operation. It does not send RSVP messages,
+change the attendee's participation status, or process CANCEL/REPLY/COUNTER
+messages as new events. Cancellation and response messages can be previewed,
+but applying scheduling updates or accepting/declining invitations is not yet
+supported. UID-based duplicates are checked under the collection's sync lock.
+
 ## Controls
 
 | Key | Action |
@@ -140,7 +175,7 @@ are marked `[recurring]` and their native recurrence data is retained. The list
 shows the series' stored start, not every occurrence. Native time zone and
 all-day information is shown rather than silently interpreted as local time.
 Existing CalDAV VTODO files are readable in the calendar view, but there is no
-task creation form. Reminder notifications, invitation handling/RSVP, free/busy,
+task creation form. Reminder notifications, invitation RSVP/update processing, free/busy,
 and structured editing of all existing properties are not yet available.
 To/Cc/Bcc contact autocomplete is available as described above.
 

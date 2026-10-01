@@ -11,7 +11,7 @@ mail and CardDAV, CalDAV, and JMAP contacts/calendars. You can also use `mbsync`
 
 **New here? Start with the [quickstart guide](docs/quickstart.md).** It walks
 through building MailSalon, connecting an existing mailbox, and sending your
-first message. Current version: **0.6.1**.
+first message. Current version: **0.7.0**.
 
 ## Get started
 
@@ -65,6 +65,8 @@ preview are on the right. The on-screen hints show your current keybindings.
 - Compose with To/Cc/Bcc, attachments, contact suggestions, and automatic reply
   account selection. Missing reply senders are saved as contacts by default
   when a contact collection is configured; this can be disabled.
+- Detect incoming calendar attachments and inline invitations, preview their events,
+  and explicitly add them to an account calendar.
 - Browse, search, create, and edit contacts and calendar items. Bind collections
   to an account or explicitly share them across accounts.
 - Sync manually or on a configurable background timer.

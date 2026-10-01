@@ -352,3 +352,17 @@ border = "#zzzzzz"
 		t.Fatalf("expected invalid theme.border error, got %v", err)
 	}
 }
+
+func TestCalendarImportBinding(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[[accounts]]\nname = \"personal\"\nmaildir = \"~/Maildir\"\n[keybindings]\nimport_calendar = \"I\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Keybindings.ImportCalendar != "I" || KeybindingsWithDefaults(Keybindings{}).ImportCalendar != "i" {
+		t.Fatal("calendar binding not applied")
+	}
+}
