@@ -148,5 +148,10 @@ Deletion uses the active account's configured Trash Maildir. If that folder is
 not present, MailSalon refuses to delete instead of guessing a path. Deleting a
 message already in Trash permanently removes the file.
 
+In Calendar, click Month/Week/Day/Agenda or press uppercase `M`/`W`/`D`/`G`.
+Use `[`/`]` for the previous/next period and `T` for today. Click a date to see
+its events; press `n` to create one on that date. See [calendar layouts and
+controls](contacts-calendar.md#calendar-view).
+
 For creating and editing contacts or events, use the
 [contacts and calendars guide](contacts-calendar.md#controls).

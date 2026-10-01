@@ -153,3 +153,12 @@ cp MailSalon ~/.local/bin/MailSalon
 Add `~/.local/bin` to your shell's `PATH` if needed. Then run `MailSalon`.
 An explicit configuration uses `MailSalon -config=/path/to/config.toml`;
 the `-config=...` spelling also works in fish.
+
+## Calendar layouts
+
+When a calendar collection is configured, press **3** or click **Calendar**.
+Choose **Month**, **Week**, **Day**, or **Agenda** with the mouse or uppercase
+`M`, `W`, `D`, or `G`. Month opens by default. Click a day to see its events;
+click **Today** or press `T` to return to today. `[` and `]` move periods, and
+`n` starts an event on the selected date. See [calendar details and
+preferences](contacts-calendar.md#calendar-view).

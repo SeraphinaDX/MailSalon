@@ -91,6 +91,7 @@ type App struct {
 	pimOffset      int
 	pimQuery       string
 	pimEditor      *pimEditor
+	calendarViews  *calendarViews
 	calendarDialog *calendarDialog
 	calendarButton *widgets.Paragraph
 	cfg            config.Config
