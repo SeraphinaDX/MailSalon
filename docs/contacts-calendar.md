@@ -169,13 +169,67 @@ protocol validation when uploading.
 
 ## Calendar view
 
-The calendar mode is a sortable list of stored items and a detail/source preview,
-not yet a month/week grid or an occurrence-expanding agenda. Recurring resources
-are marked `[recurring]` and their native recurrence data is retained. The list
-shows the series' stored start, not every occurrence. Native time zone and
-all-day information is shown rather than silently interpreted as local time.
-Existing CalDAV VTODO files are readable in the calendar view, but there is no
-task creation form. Reminder notifications, invitation RSVP/update processing, free/busy,
-and structured editing of all existing properties are not yet available.
-To/Cc/Bcc contact autocomplete is available as described above.
+Press **3 Calendar**, then click **Month**, **Week**, **Day**, or **Agenda**.
+Month is the default: a six-week grid with today marked `*`, the selected day
+highlighted, and event counts/titles in each cell. The list below shows every
+event overlapping the selected day, including those that do not fit in a cell.
+Week shows seven date columns. Day shows a time-ordered event list and details.
+Agenda shows occurrences over the next 30 days from the selected date.
 
+| Key | Calendar action |
+| --- | --- |
+| `M` / `W` / `D` / `G` | Month / Week / Day / Agenda (uppercase) |
+| `[` / `]`, or PgUp/PgDn with dates/events focused | Previous / next month, week, day, or 30-day agenda window |
+| `T` | Go to today in the current layout |
+| Left / Right in the date grid | Select the previous / next day |
+| Up / Down or `k` / `j` in the date grid | Select the same weekday one week earlier / later |
+| Enter in the date grid | Focus the selected day's events |
+| Tab | Cycle calendars, dates (when present), events, and details |
+| `h` / `l` | Move focus between panes |
+| `n` | Create an event on the selected date |
+| `e` | Edit the selected event's stored source, including its whole recurring series |
+| `d`, then `d` | Delete the selected event or entire recurring series locally |
+
+Click a date to select it, an event row to view details, or **Previous**, **Today**,
+and **Next** to navigate. The mouse wheel moves periods over the grid, items over
+the event/calendar lists, and text over the details pane. Switching layouts or
+accounts keeps the selected date. The sidebar selects one calendar belonging to
+the active account, or an explicitly shared calendar. Search filters stored
+items by their title, stored start, location, and notes before projecting dates.
+
+No config changes are required. Optional preferences go in your existing table:
+
+```toml
+[options]
+calendar_default_view = "month" # month, week, day, agenda
+calendar_week_start = "monday"  # monday or sunday
+```
+
+The calendar shortcuts can be changed with `calendar_month`, `calendar_week`,
+`calendar_day`, `calendar_agenda`, `calendar_previous`, `calendar_next`, and
+`calendar_today` in `[keybindings]`. Labels show the configured shortcuts.
+
+### Dates and recurrence
+
+Timed events with UTC or IANA time zones are displayed in the computer's local
+time zone. Floating times retain their wall-clock time. All-day dates retain
+their dates and use an exclusive end; multi-day events appear on each overlapping
+day. Sources are preserved unchanged. Existing dated CalDAV VTODO resources can
+be displayed; there is no task creation form.
+
+CalDAV supports one daily/weekly/monthly/yearly RRULE, RDATE/EXDATE date lists,
+and moved or cancelled single recurrence exceptions. JMAP/JSCalendar supports
+one recurrence rule with ordinary date selectors and supported occurrence
+patches (start, duration, title, description, time zone, all-day flag, locations,
+status, or exclusion). Occurrences keep their source identity: editing/deleting
+one operates on the whole stored series. The deletion prompt names this scope.
+
+Subdaily recurrence, multiple times per day, multiple rules, custom embedded
+time zones that are not IANA names, RANGE exceptions, JSCalendar excluded rules,
+leap-month selectors, and other occurrence patches are currently unsupported.
+Expansion is bounded to 50,000 generated occurrences per source and 4,096 per
+window. A visible warning links these resources to **Agenda**, where `[source]`
+rows provide details and source editing instead of silently dropping them.
+
+Reminder notifications, invitation RSVP/update processing, free/busy, and
+structured editing of all existing properties are not yet available.

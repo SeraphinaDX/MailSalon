@@ -11,7 +11,7 @@ mail and CardDAV, CalDAV, and JMAP contacts/calendars. You can also use `mbsync`
 
 **New here? Start with the [quickstart guide](docs/quickstart.md).** It walks
 through building MailSalon, connecting an existing mailbox, and sending your
-first message. Current version: **0.7.0**.
+first message. Current version: **0.8.0**.
 
 ## Get started
 
@@ -67,15 +67,17 @@ preview are on the right. The on-screen hints show your current keybindings.
   when a contact collection is configured; this can be disabled.
 - Detect incoming calendar attachments and inline invitations, preview their events,
   and explicitly add them to an account calendar.
+- Browse calendars in Month, Week, Day, and Agenda views, with recurring events,
+  mouse date selection, and a Today shortcut.
 - Browse, search, create, and edit contacts and calendar items. Bind collections
   to an account or explicitly share them across accounts.
 - Sync manually or on a configurable background timer.
 - Select text in editable fields and customize keys and colors.
 - Sign, encrypt, decrypt, and verify PGP/MIME mail with optional GnuPG support.
 
-Calendar browsing currently uses an item list and source preview. Recurrence
-data is preserved, but there is no month/week grid, expanded recurring agenda,
-reminder notification, or invitation/RSVP workflow yet. See
+Calendar views display supported recurrences and keep native source data for
+editing. Reminder notifications and invitation RSVP/update processing are not
+yet available. See
 [contacts and calendars](docs/contacts-calendar.md#calendar-view).
 
 ## Documentation

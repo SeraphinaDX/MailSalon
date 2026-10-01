@@ -8,6 +8,41 @@ import (
 	"time"
 )
 
+func TestCalendarOptionsAndBindings(t *testing.T) {
+	for _, tc := range []struct {
+		options string
+		valid   bool
+	}{
+		{"", true},
+		{"calendar_default_view = \"week\"\ncalendar_week_start = \"sunday\"", true},
+		{"calendar_default_view = \"year\"", false},
+		{"calendar_week_start = \"tuesday\"", false},
+	} {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(path, []byte("[[accounts]]\nname = \"personal\"\n[options]\n"+tc.options+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if (err == nil) != tc.valid {
+			t.Fatal(tc, err)
+		}
+		if tc.valid && tc.options == "" && (cfg.CalendarDefaultView != "month" || cfg.CalendarWeekStart != "monday") {
+			t.Fatal("calendar defaults", cfg)
+		}
+		if tc.valid && tc.options != "" && (cfg.CalendarDefaultView != "week" || cfg.CalendarWeekStart != "sunday") {
+			t.Fatal("calendar preferences", cfg)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[[accounts]]\nname = \"personal\"\n[keybindings]\ncalendar_month = \"F4\"\ncalendar_today = \"F5\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil || cfg.Keybindings.CalendarMonth != "F4" || cfg.Keybindings.CalendarToday != "F5" {
+		t.Fatal(cfg.Keybindings, err)
+	}
+}
+
 func TestLoadMultipleAccountsTOML(t *testing.T) {
 	dir := t.TempDir()
 	sig := filepath.Join(dir, "signature.txt")

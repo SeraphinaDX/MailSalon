@@ -26,7 +26,7 @@ if you want to exercise real signing, encryption, decryption, and verification.
 | `internal/mimeutil` | MIME parsing/building and attachment handling |
 | `internal/transport` | External receive/send commands |
 | `internal/pgp` | GnuPG integration |
-| `internal/calendar` | Incoming iCalendar parsing and native import conversion |
+| `internal/calendar` | iCalendar/JSCalendar occurrence projection and incoming import conversion |
 | `internal/pim` | Native contact/calendar files and local editing |
 | `internal/ui` | Terminal views, input widgets and application actions |
 | `internal/version` | Version string |

@@ -112,6 +112,8 @@ default_account = "personal"
 startup_sync = false
 sync_interval = "5m"
 auto_add_reply_contacts = true
+calendar_default_view = "month"
+calendar_week_start = "monday"
 ```
 
 | Option | Default | Behavior |
@@ -120,6 +122,8 @@ auto_add_reply_contacts = true
 | `startup_sync` | `false` | Run the selected account's receive command once at startup |
 | `sync_interval` | `"5m"` | Interval between background receive cycles; `"0"` disables them |
 | `auto_add_reply_contacts` | `true` | Save missing senders when opening replies, if a contact collection is configured |
+| `calendar_default_view` | `"month"` | Initial layout: `month`, `week`, `day`, or `agenda` |
+| `calendar_week_start` | `"monday"` | First weekday: `monday` or `sunday` |
 
 Intervals use Go duration syntax, such as `"30s"`, `"10m"`, or `"1h"`. Enabled
 intervals must be at least one second. Background cycles run the accounts'
@@ -157,6 +161,13 @@ MailSalon action keys can be changed in `config.toml`. The main-view, message-pr
 mail_view = "1"
 contacts_view = "2"
 calendar_view = "3"
+calendar_month = "M"
+calendar_week = "W"
+calendar_day = "D"
+calendar_agenda = "G"
+calendar_previous = "["
+calendar_next = "]"
+calendar_today = "T"
 quit = "q"
 compose = "c"
 sync = "u"

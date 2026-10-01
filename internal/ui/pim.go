@@ -21,6 +21,9 @@ type pimEditor struct {
 }
 
 func (a *App) setView(view int) {
+	if view == 2 {
+		a.ensureCalendarViews()
+	}
 	a.view = view
 	a.deleteArmed = false
 	a.searchActive = false
@@ -54,6 +57,10 @@ func (a *App) setView(view int) {
 func (a *App) loadPIM() error {
 	a.pimItems = nil
 	a.pimAllItems = nil
+	a.deleteArmed = false
+	if a.calendarViews != nil {
+		a.calendarViews.dirty = true
+	}
 	if len(a.pimCollections) == 0 {
 		return nil
 	}
@@ -66,6 +73,9 @@ func (a *App) loadPIM() error {
 	return nil
 }
 func (a *App) filterPIM() {
+	if a.calendarViews != nil {
+		a.calendarViews.dirty = true
+	}
 	a.pimItems = nil
 	a.pimSelected = 0
 	a.pimOffset = 0
@@ -85,6 +95,9 @@ func (a *App) handlePIMKey(id string) bool {
 	}
 	if !bindingMatches(id, k.Delete) {
 		a.deleteArmed = false
+	}
+	if a.view == 2 && a.handleCalendarViewKey(id) {
+		return false
 	}
 	switch {
 	case bindingMatches(id, k.FocusNext):
@@ -132,13 +145,19 @@ func (a *App) handlePIMKey(id string) bool {
 	case bindingMatches(id, k.Compose):
 		a.composeContact()
 	case bindingMatches(id, k.Delete):
-		if len(a.pimItems) == 0 {
+		if a.view == 2 {
+			a.selectCalendarSource()
+		}
+		if len(a.pimItems) == 0 || a.pimSelected < 0 {
 			a.status = "No item selected"
 			break
 		}
 		if !a.deleteArmed {
 			a.deleteArmed = true
 			a.status = "Press " + keyLabel(k.Delete) + " again to delete locally (sync controls remote deletion)"
+			if a.view == 2 && (a.pimItems[a.pimSelected].Recurring || a.calendarViews.rows[a.calendarViews.selected].Recurring) {
+				a.status = "Press " + keyLabel(k.Delete) + " again to delete the entire recurring series locally"
+			}
 			break
 		}
 		if err := pim.Delete(a.pimCollections[a.pimCollection], a.pimItems[a.pimSelected]); err != nil {
@@ -201,6 +220,10 @@ func (a *App) renderPIM(w, h int) {
 		a.renderPIMEditor(w, h)
 		return
 	}
+	if a.view == 2 {
+		a.renderCalendarViews(w, h)
+		return
+	}
 	left := clamp(w/5, 18, 30)
 	footer := h - 3
 	split := max(8, h*45/100)
@@ -216,11 +239,8 @@ func (a *App) renderPIM(w, h int) {
 	a.folderList.Title = "Address books"
 	a.messageTbl.Title = "Contacts — " + a.currentAccount().Name
 	a.preview.Title = "Contact"
-	if a.view == 2 {
-		a.folderList.Title = "Calendars"
-		a.messageTbl.Title = "Calendar — " + a.currentAccount().Name + " (series starts)"
-		a.preview.Title = "Calendar item"
-	}
+	a.preview.TitleBottom = "Scroll / wheel"
+
 	visibleCollections := max(1, a.folderList.Inner.Dy())
 	a.folderOffset = keepVisible(a.pimCollection, a.folderOffset, visibleCollections, len(a.pimCollections))
 	a.folderList.Rows = nil
@@ -241,20 +261,9 @@ func (a *App) renderPIM(w, h int) {
 	visible := max(1, a.messageTbl.Inner.Dy()-1)
 	a.pimOffset = keepVisible(a.pimSelected, a.pimOffset, visible, len(a.pimItems))
 	rows := [][]string{{"Name", "Email", "Phone"}}
-	if a.view == 2 {
-		rows = [][]string{{"Start", "Title", "Time zone"}}
-	}
 	for i := a.pimOffset; i < min(len(a.pimItems), a.pimOffset+visible); i++ {
 		item := a.pimItems[i]
-		if a.view == 1 {
-			rows = append(rows, []string{safeUI(item.Title), safeUI(item.Email), safeUI(item.Phone)})
-		} else {
-			title := item.Title
-			if item.Recurring {
-				title += " [recurring]"
-			}
-			rows = append(rows, []string{safeUI(item.Start), safeUI(title), safeUI(item.Zone)})
-		}
+		rows = append(rows, []string{safeUI(item.Title), safeUI(item.Email), safeUI(item.Phone)})
 	}
 	a.messageTbl.Rows = rows
 	a.messageTbl.ColumnWidths = []int{max(12, (w-left)/3), max(12, (w-left)/3), max(8, (w-left)/3-4)}
@@ -266,14 +275,7 @@ func (a *App) renderPIM(w, h int) {
 	if len(a.pimItems) > 0 {
 		i := a.pimItems[a.pimSelected]
 		text := fmt.Sprintf("%s\n", i.Title)
-		if a.view == 1 {
-			text += fmt.Sprintf("Email: %s\nPhone: %s\n", i.Email, i.Phone)
-		} else {
-			text += fmt.Sprintf("Start: %s\nEnd/duration: %s\nTime zone: %s\nLocation: %s\n", i.Start, i.End, i.Zone, i.Location)
-			if i.Recurring {
-				text += "Recurring series; occurrences are not expanded in this view.\n"
-			}
-		}
+		text += fmt.Sprintf("Email: %s\nPhone: %s\n", i.Email, i.Phone)
 		text += i.Notes + "\n\n" + string(i.Data)
 		lines := strings.Split(safeUI(text), "\n")
 		a.previewScroll = clamp(a.previewScroll, 0, max(0, len(lines)-1))
@@ -291,6 +293,10 @@ func (a *App) renderPIM(w, h int) {
 }
 
 func (a *App) handlePIMMouse(e ui.Event) {
+	if a.view == 2 {
+		a.handleCalendarViewMouse(e)
+		return
+	}
 	if a.handleViewTabMouse(e) {
 		return
 	}
@@ -350,7 +356,10 @@ func (a *App) startPIMEditor(edit bool) {
 	}
 	e := &pimEditor{}
 	if edit {
-		if len(a.pimItems) == 0 {
+		if a.view == 2 {
+			a.selectCalendarSource()
+		}
+		if len(a.pimItems) == 0 || a.pimSelected < 0 {
 			a.status = "Select an item first"
 			return
 		}
@@ -366,6 +375,10 @@ func (a *App) startPIMEditor(edit bool) {
 		if a.view == 2 {
 			labels = []string{"Title", "Start: YYYY-MM-DDTHH:MM:SS (or YYYY-MM-DD)", "End: same format (all-day end is exclusive)", "Time zone: IANA name, or empty for floating", "Location"}
 			now := time.Now().Truncate(time.Hour)
+			if a.calendarViews != nil {
+				day := a.calendarViews.date
+				now = time.Date(day.Year(), day.Month(), day.Day(), now.Hour(), 0, 0, 0, time.Local)
+			}
 			values = []string{"", now.Format("2006-01-02T15:04:05"), now.Add(time.Hour).Format("2006-01-02T15:04:05"), "", ""}
 		}
 		for i, label := range labels {
