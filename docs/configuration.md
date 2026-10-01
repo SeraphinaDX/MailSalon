@@ -167,6 +167,7 @@ toggle_read = "m"
 search = "/"
 delete = "d"
 save_attachments = "a"
+import_calendar = "i"
 switch_account = "A"
 refresh = "R"
 

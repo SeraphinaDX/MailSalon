@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"git.cerberusgames.ca/Starstreak/MailSalon/internal/calendar"
 )
 
 type Attachment struct {
@@ -27,15 +29,17 @@ type Attachment struct {
 }
 
 type ParsedMessage struct {
-	From        string
-	To          string
-	Cc          string
-	Subject     string
-	Date        string
-	MessageID   string
-	References  string
-	Body        string
-	Attachments []Attachment
+	From           string
+	To             string
+	Cc             string
+	Subject        string
+	Date           string
+	MessageID      string
+	References     string
+	Body           string
+	Attachments    []Attachment
+	CalendarEvents []calendar.Event
+	CalendarErrors []string
 }
 
 type Draft struct {
@@ -49,6 +53,8 @@ type Draft struct {
 	References        string
 	Attachments       []string
 	MemoryAttachments []Attachment
+	CalendarEvents    []calendar.Event
+	CalendarErrors    []string
 }
 
 var (
@@ -322,7 +328,30 @@ func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage, plain
 		filename = params["name"]
 	}
 	filename = decodeHeader(filename)
-	if strings.EqualFold(disp, "attachment") || filename != "" {
+	isCalendar := strings.EqualFold(ctype, "text/calendar") || strings.EqualFold(ctype, "application/ics") || strings.EqualFold(ctype, "application/icalendar") || strings.EqualFold(filepath.Ext(filename), ".ics")
+	if isCalendar {
+		if filename == "" {
+			filename = fmt.Sprintf("calendar-%d.ics", len(p.Attachments)+1)
+		}
+		events, err := calendar.Parse(decoded)
+		if err == nil {
+			for i := range events {
+				method := strings.ToUpper(params["method"])
+				if events[i].Method == "" {
+					events[i].Method = method
+				} else if method != "" && method != events[i].Method {
+					err = fmt.Errorf("conflicting MIME and calendar METHOD")
+					break
+				}
+			}
+		}
+		if err != nil {
+			p.CalendarErrors = append(p.CalendarErrors, filename+": "+err.Error())
+		} else {
+			p.CalendarEvents = append(p.CalendarEvents, events...)
+		}
+	}
+	if isCalendar || strings.EqualFold(disp, "attachment") || filename != "" {
 		p.Attachments = append(p.Attachments, Attachment{Filename: filename, MIMEType: ctype, Data: decoded})
 		return nil
 	}

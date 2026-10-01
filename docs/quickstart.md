@@ -138,6 +138,9 @@ existing `[options]` section:
 auto_add_reply_contacts = false
 ```
 
+If a message contains calendar events, press `i` or click **Calendar attachment**
+to review and add one to a calendar. See [calendar attachment import](contacts-calendar.md#incoming-calendar-attachments).
+
 ## Optional: install the binary
 
 To run MailSalon outside the checkout:

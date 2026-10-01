@@ -91,6 +91,8 @@ type App struct {
 	pimOffset      int
 	pimQuery       string
 	pimEditor      *pimEditor
+	calendarDialog *calendarDialog
+	calendarButton *widgets.Paragraph
 	cfg            config.Config
 	theme          resolvedTheme
 	account        int
@@ -219,6 +221,13 @@ func (a *App) Run() error {
 				return nil
 			}
 			if e.Type == ui.ResizeEvent {
+				a.render()
+				continue
+			}
+			if a.calendarDialog != nil {
+				if a.handleCalendarImport(e) {
+					return nil
+				}
 				a.render()
 				continue
 			}
@@ -563,6 +572,10 @@ func (a *App) handleKey(id string) bool {
 		}
 		return false
 	}
+	if bindingMatches(id, keys.ImportCalendar) {
+		a.startCalendarImport()
+		return false
+	}
 	if bindingMatches(id, keys.SaveAttachments) {
 		a.saveAttachments()
 		return false
@@ -876,7 +889,10 @@ func (a *App) handleMouse(e ui.Event) {
 		return
 	}
 	p := image.Pt(m.X, m.Y)
-
+	if a.hasCalendarEvents() && a.calendarButton != nil && p.In(a.calendarButton.Rectangle) && (e.ID == "<MouseLeft>" || e.ID == "MouseLeft") {
+		a.startCalendarImport()
+		return
+	}
 	switch e.ID {
 	case "<MouseLeft>", "MouseLeft":
 		switch {
@@ -1419,6 +1435,10 @@ func (a *App) render() {
 		ui.Render(p)
 		return
 	}
+	if a.calendarDialog != nil {
+		a.renderCalendarImport(w, h)
+		return
+	}
 	if a.compose != nil {
 		a.renderCompose(w, h)
 		return
@@ -1442,7 +1462,11 @@ func (a *App) render() {
 	a.updateBar.SetRect(0, 1+accountH, folderW, 1+accountH+updateH)
 	a.folderList.SetRect(0, 1+accountH+updateH, folderW, footerY)
 	a.messageTbl.SetRect(rightX, 1, w, listH)
-	a.preview.SetRect(rightX, listH, w, footerY)
+	previewEnd := footerY
+	if a.hasCalendarEvents() {
+		previewEnd -= 3
+	}
+	a.preview.SetRect(rightX, listH, w, previewEnd)
 	setBarRect(a.footer, 0, footerY, w, h)
 
 	a.populateAccountBar()
@@ -1455,6 +1479,9 @@ func (a *App) render() {
 
 	a.updateFocusStyles()
 	items := append(a.layoutViewTabs(w), a.accountBar, a.updateBar, a.folderList, a.messageTbl, a.preview, a.footer)
+	if a.hasCalendarEvents() {
+		items = append(items, a.layoutCalendarButton(rightX, footerY-3, w))
+	}
 	if a.searchActive {
 		promptW := clamp(w-12, 40, 90)
 		x := (w - promptW) / 2
@@ -1574,6 +1601,7 @@ func (a *App) populatePreview() {
 		}
 		fmt.Fprintf(&b, "Attachments: %s\n", strings.Join(names, ", "))
 	}
+	b.WriteString(a.calendarSummary())
 	b.WriteString("\n")
 	b.WriteString(a.parsed.Body)
 
@@ -1621,6 +1649,9 @@ func (a *App) footerText() string {
 		keyLabel(keys.Sync) + " Sync",
 		keyLabel(keys.Reply) + " Reply",
 		keyLabel(keys.Forward) + " Forward",
+	}
+	if a.hasCalendarEvents() {
+		line2Parts = append(line2Parts, keyLabel(keys.ImportCalendar)+" Calendar attachment")
 	}
 	if a.archiveAvailable() {
 		line2Parts = append(line2Parts, keyLabel(keys.Archive)+" Archive")
