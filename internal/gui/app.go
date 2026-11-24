@@ -7,7 +7,6 @@ package gui
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -438,7 +437,7 @@ func (a *App) loadMessage(id int, autoRead bool) {
 	// No automatic mutation while parsing: a stale result must not mark a message
 	// read after the user has changed folders or selected another message.
 	go func() {
-		raw, err := os.ReadFile(e.Path)
+		raw, err := mimeutil.ReadMessageFile(e.Path)
 		var p *mimeutil.ParsedMessage
 		var info pgp.Info
 		if err == nil {
@@ -709,7 +708,7 @@ func (a *App) showSource() {
 		return
 	}
 	go func() {
-		raw, err := os.ReadFile(e.Path)
+		raw, err := mimeutil.ReadMessageFile(e.Path)
 		a.post(func() {
 			if err != nil {
 				a.fail(err)

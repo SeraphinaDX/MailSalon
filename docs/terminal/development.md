@@ -4,7 +4,7 @@
 
 ## Build and test
 
-Use Go 1.24 or newer. Dependencies are declared in `go.mod` and downloaded by Go.
+Use Go 1.26 or newer. Dependencies are declared in `go.mod` and downloaded by Go.
 
 ```sh
 go build -o MailSalon ./cmd/MailSalon

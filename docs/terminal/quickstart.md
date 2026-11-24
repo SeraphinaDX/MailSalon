@@ -3,7 +3,7 @@
 [Documentation index](README.md) · [Configuration reference](configuration.md)
 
 This guide takes you from an existing email account to reading and sending mail
-in MailSalon. The commands below use Linux paths. You need Git, Go 1.24 or newer,
+in MailSalon. The commands below use Linux paths. You need Git, Go 1.26 or newer,
 a terminal, and a configured mail sync/sending tool. Go downloads MailSalon's
 library dependencies during the build; you do not install gotui separately.
 

@@ -48,6 +48,8 @@ type Info struct {
 	Signer         string
 	KeyID          string
 	Fingerprint    string
+	Trust          string
+	FromMatch      bool
 	Error          string
 }
 
@@ -81,6 +83,20 @@ func (i Info) Summary() string {
 		default:
 			parts = append(parts, "signature not verified")
 		}
+	}
+	if i.Signed && i.Verified && i.SignatureValid {
+		if i.Fingerprint != "" {
+			parts = append(parts, "key fingerprint: "+i.Fingerprint)
+		}
+		trust := i.Trust
+		if trust == "" {
+			trust = "unknown"
+		}
+		parts = append(parts, "key trust: "+trust)
+		if !i.FromMatch {
+			parts = append(parts, "signer does not match From address")
+		}
+		parts = append(parts, "email headers, including From, are not signed")
 	}
 	if strings.TrimSpace(i.Error) != "" {
 		parts = append(parts, i.Error)
@@ -161,7 +177,13 @@ func ProtectOutgoing(ctx context.Context, raw []byte, opts OutgoingOptions) ([]b
 // whenever possible plus Info describing what failed.
 func ProcessIncoming(ctx context.Context, raw []byte, settings Settings) ([]byte, Info) {
 	settings = normalizeSettings(settings)
-	return processIncoming(ctx, raw, settings, 0)
+	processed, info := processIncoming(ctx, raw, settings, 0)
+	if info.Signed && info.SignatureValid {
+		from := messageAddress(raw, "From")
+		signer, err := mail.ParseAddress(info.Signer)
+		info.FromMatch = err == nil && from != "" && strings.EqualFold(from, signer.Address)
+	}
+	return processed, info
 }
 
 func processIncoming(ctx context.Context, raw []byte, settings Settings, depth int) ([]byte, Info) {
@@ -218,10 +240,11 @@ func processIncoming(ctx context.Context, raw []byte, settings Settings, depth i
 		}
 		v, verifyErr := verifyDetached(ctx, settings, entity, sig)
 		info.Verified = true
-		info.SignatureValid = v.Valid
+		info.SignatureValid = v.Valid && verifyErr == nil
 		info.Signer = v.Signer
 		info.KeyID = v.KeyID
 		info.Fingerprint = v.Fingerprint
+		info.Trust = v.Trust
 		if verifyErr != nil {
 			info.Error = "verification failed: " + verifyErr.Error()
 		}
@@ -237,6 +260,7 @@ type verification struct {
 	Signer      string
 	KeyID       string
 	Fingerprint string
+	Trust       string
 }
 
 func normalizeSettings(s Settings) Settings {
@@ -336,10 +360,30 @@ func runGPG(ctx context.Context, command string, args []string, stdin []byte) ([
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+	limited := &limitedOutput{buffer: &stdout, remaining: 64 << 20}
+	cmd.Stdout = limited
 	cmd.Stderr = &stderr
 	err := cmd.Run()
+	if limited.exceeded {
+		return nil, stderr.String(), fmt.Errorf("OpenPGP output exceeds size limit")
+	}
 	return stdout.Bytes(), stderr.String(), err
+}
+
+type limitedOutput struct {
+	buffer    *bytes.Buffer
+	remaining int
+	exceeded  bool
+}
+
+func (w *limitedOutput) Write(p []byte) (int, error) {
+	if len(p) > w.remaining {
+		w.exceeded = true
+		return 0, fmt.Errorf("OpenPGP output exceeds size limit")
+	}
+	n, err := w.buffer.Write(p)
+	w.remaining -= n
+	return n, err
 }
 
 func gpgCommandError(err error, status string) error {
@@ -382,6 +426,8 @@ func parseVerificationStatus(status string) verification {
 			if len(fields) >= 2 {
 				v.Fingerprint = fields[1]
 			}
+		case "TRUST_UNDEFINED", "TRUST_NEVER", "TRUST_MARGINAL", "TRUST_FULLY", "TRUST_ULTIMATE":
+			v.Trust = strings.ToLower(strings.TrimPrefix(fields[0], "TRUST_"))
 		case "BADSIG":
 			v.Valid = false
 			if len(fields) >= 2 {
@@ -735,6 +781,10 @@ func mergeInfo(a, b Info) Info {
 		out.Signer = b.Signer
 		out.KeyID = b.KeyID
 		out.Fingerprint = b.Fingerprint
+		out.Trust = b.Trust
+		if a.Verified && !a.SignatureValid {
+			out.SignatureValid = false
+		}
 	}
 	if strings.TrimSpace(b.Error) != "" {
 		if strings.TrimSpace(out.Error) == "" {

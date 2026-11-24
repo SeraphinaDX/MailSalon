@@ -62,18 +62,42 @@ type Draft struct {
 
 var wordDecoder = &mime.WordDecoder{CharsetReader: charset.NewReaderLabel}
 
-func ParseFile(path string) (*ParsedMessage, error) {
+const MaxMessageSize = 64 << 20
+const maxPartSize = 32 << 20
+const maxParts = 256
+const maxDepth = 32
+
+// ReadMessageFile limits input before allocating memory for an untrusted message.
+func ReadMessageFile(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return parseMessage(f)
+	data, err := io.ReadAll(io.LimitReader(f, MaxMessageSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxMessageSize {
+		return nil, fmt.Errorf("message exceeds %d bytes", MaxMessageSize)
+	}
+	return data, nil
+}
+
+func ParseFile(path string) (*ParsedMessage, error) {
+	raw, err := ReadMessageFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBytes(raw)
 }
 
 // ParseBytes parses a complete RFC 5322 message already held in memory. This is
 // used after OpenPGP processing has decrypted/verified a PGP/MIME wrapper.
 func ParseBytes(raw []byte) (*ParsedMessage, error) {
+	if len(raw) > MaxMessageSize {
+		return nil, fmt.Errorf("message exceeds %d bytes", MaxMessageSize)
+	}
 	return parseMessage(bytes.NewReader(raw))
 }
 
@@ -92,7 +116,7 @@ func parseMessage(r io.Reader) (*ParsedMessage, error) {
 		MessageID:  strings.TrimSpace(m.Header.Get("Message-ID")),
 		References: strings.TrimSpace(m.Header.Get("References")),
 	}
-	body, err := parseEntity(textproto.MIMEHeader(m.Header), m.Body, p)
+	body, err := parseEntity(textproto.MIMEHeader(m.Header), m.Body, p, 0, &parseBudget{})
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +339,19 @@ type mimeBody struct {
 	html, plain bool
 }
 
-func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage) (mimeBody, error) {
+type parseBudget struct {
+	parts   int
+	decoded int64
+}
+
+func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage, depth int, budget *parseBudget) (mimeBody, error) {
+	if depth > maxDepth {
+		return mimeBody{}, fmt.Errorf("MIME nesting exceeds %d levels", maxDepth)
+	}
+	budget.parts++
+	if budget.parts > maxParts {
+		return mimeBody{}, fmt.Errorf("MIME message exceeds %d parts", maxParts)
+	}
 	ctype, params, err := mime.ParseMediaType(h.Get("Content-Type"))
 	if err != nil || ctype == "" {
 		ctype = "text/plain"
@@ -335,7 +371,7 @@ func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage) (mime
 			if err != nil {
 				return mimeBody{}, err
 			}
-			content, err := parseEntity(part.Header, part, p)
+			content, err := parseEntity(part.Header, part, p, depth+1, budget)
 			if err != nil {
 				return mimeBody{}, err
 			}
@@ -377,9 +413,16 @@ func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage) (mime
 		return combined, nil
 	}
 
-	decoded, err := io.ReadAll(decodeTransfer(h.Get("Content-Transfer-Encoding"), body))
+	decoded, err := io.ReadAll(io.LimitReader(decodeTransfer(h.Get("Content-Transfer-Encoding"), body), maxPartSize+1))
 	if err != nil {
 		return mimeBody{}, err
+	}
+	if len(decoded) > maxPartSize {
+		return mimeBody{}, fmt.Errorf("MIME part exceeds %d bytes", maxPartSize)
+	}
+	budget.decoded += int64(len(decoded))
+	if budget.decoded > MaxMessageSize {
+		return mimeBody{}, fmt.Errorf("decoded MIME content exceeds %d bytes", MaxMessageSize)
 	}
 	disp, dparams, _ := mime.ParseMediaType(h.Get("Content-Disposition"))
 	filename := dparams["filename"]
@@ -394,7 +437,7 @@ func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage) (mime
 		}
 		if calendar && params["charset"] != "" {
 			if r, err := charset.NewReaderLabel(params["charset"], bytes.NewReader(decoded)); err == nil {
-				if converted, err := io.ReadAll(r); err == nil {
+				if converted, err := io.ReadAll(io.LimitReader(r, maxPartSize+1)); err == nil && len(converted) <= maxPartSize {
 					decoded = converted
 				}
 			}
@@ -424,9 +467,12 @@ func parseEntity(h textproto.MIMEHeader, body io.Reader, p *ParsedMessage) (mime
 			// An unrecognized label must not hide an otherwise readable message.
 			textReader = bytes.NewReader(decoded)
 		}
-		text, err := io.ReadAll(textReader)
+		text, err := io.ReadAll(io.LimitReader(textReader, maxPartSize+1))
 		if err != nil {
 			return mimeBody{}, err
+		}
+		if len(text) > maxPartSize {
+			return mimeBody{}, fmt.Errorf("decoded text exceeds %d bytes", maxPartSize)
 		}
 		readable := strings.ToValidUTF8(string(text), "\uFFFD")
 		if strings.EqualFold(ctype, "text/html") {

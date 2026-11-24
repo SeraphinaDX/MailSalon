@@ -447,7 +447,7 @@ func (a *App) openMessage(index int) error {
 	}
 	a.selectedMessage = index
 	oldPath := a.messages[index].Path
-	raw, err := os.ReadFile(a.messages[index].Path)
+	raw, err := mimeutil.ReadMessageFile(a.messages[index].Path)
 	if err != nil {
 		return err
 	}
@@ -784,7 +784,7 @@ func messageMatchesSearchWithPGP(entry maildir.Entry, query string, settings pgp
 	if strings.Contains(quick, needle) {
 		return true
 	}
-	raw, err := os.ReadFile(entry.Path)
+	raw, err := mimeutil.ReadMessageFile(entry.Path)
 	if err != nil {
 		return false
 	}

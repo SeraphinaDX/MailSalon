@@ -88,3 +88,24 @@ func TestPGPMIMESignEncryptRoundTrip(t *testing.T) {
 		t.Fatalf("OpenPGP wrappers were not removed before MIME parsing:\n%s", processed)
 	}
 }
+
+func TestSignatureStatusShowsTrustAndUnsignedHeaders(t *testing.T) {
+	status := parseVerificationStatus("[GNUPG:] GOODSIG ABC Alice <alice@example.com>\n[GNUPG:] VALIDSIG 1234567890\n[GNUPG:] TRUST_NEVER 0 pgp\n")
+	if !status.Valid || status.Trust != "never" || status.Fingerprint != "1234567890" {
+		t.Fatalf("unexpected status: %#v", status)
+	}
+	summary := (Info{Signed: true, Verified: true, SignatureValid: true, Signer: status.Signer, Fingerprint: status.Fingerprint, Trust: status.Trust}).Summary()
+	for _, text := range []string{"trust: never", "1234567890", "does not match", "not signed"} {
+		if !strings.Contains(summary, text) {
+			t.Errorf("summary %q missing %q", summary, text)
+		}
+	}
+}
+
+func TestNestedBadSignatureNotHidden(t *testing.T) {
+	outer := Info{Signed: true, Verified: true, SignatureValid: false}
+	inner := Info{Signed: true, Verified: true, SignatureValid: true}
+	if mergeInfo(outer, inner).SignatureValid {
+		t.Fatal("inner valid signature hid outer invalid signature")
+	}
+}

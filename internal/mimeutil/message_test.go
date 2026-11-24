@@ -3,6 +3,7 @@
 package mimeutil
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,5 +133,31 @@ func TestParseHTMLOnlyAsPlainText(t *testing.T) {
 		if strings.Contains(parsed.Body, unwanted) {
 			t.Fatalf("HTML rendering leaked %q:\n%s", unwanted, parsed.Body)
 		}
+	}
+}
+
+func TestRejectExcessiveMIMENesting(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i <= maxDepth; i++ {
+		fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=b%d\r\n\r\n--b%d\r\n", i, i)
+	}
+	b.WriteString("Content-Type: text/plain\r\n\r\nhello\r\n")
+	for i := maxDepth; i >= 0; i-- {
+		fmt.Fprintf(&b, "\r\n--b%d--\r\n", i)
+	}
+	if _, err := ParseBytes([]byte(b.String())); err == nil {
+		t.Fatal("expected nesting limit error")
+	}
+}
+
+func TestRejectTooManyMIMEParts(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("Content-Type: multipart/mixed; boundary=b\r\n\r\n")
+	for i := 0; i < maxParts; i++ {
+		b.WriteString("--b\r\nContent-Type: text/plain\r\n\r\nx\r\n")
+	}
+	b.WriteString("--b--\r\n")
+	if _, err := ParseBytes([]byte(b.String())); err == nil {
+		t.Fatal("expected part limit error")
 	}
 }

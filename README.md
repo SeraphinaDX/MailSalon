@@ -19,7 +19,7 @@ explained in [Consolidation](docs/consolidation.md).
 
 ## Build and try it
 
-Install Go 1.24 or newer and the desktop dependencies described by
+Install Go 1.26 or newer and the desktop dependencies described by
 [Fyne's quick start](https://docs.fyne.io/started/quick/).
 Fyne's desktop graphics driver needs cgo and a C compiler.
 
