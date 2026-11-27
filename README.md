@@ -7,7 +7,7 @@ packages. Each retains its own executable, configuration path and interface.
 
 ## MailSalon Family
 
-This software is part of the MailSalon Family which also includes [MailSalonSync](https://github.com/SeraphinaDX/MailSalonSync) and [MailSalonTools](https://github.com/SeraphinaDX/MailSalonTools)
+This software is part of the MailSalon Family which also includes [MailSalonSync](https://github.com/SeraphinaDX/MailSalonSync) and [MailSalonTools.](https://github.com/SeraphinaDX/MailSalonTools)
 
 ## Build
 
