@@ -17,6 +17,14 @@ explained in [Consolidation](docs/consolidation.md).
 
 ![MailSalonGUI mail view](docs/screenshots/mail.png)
 
+## LLM Code Policy
+
+This project does not discriminate against the use of LLM generated code. The project already does contain LLM generated code. Just make sure the code compiles and does not introduce new bugs or cause it not to pass tests.
+
+This project also chose the language Go precisely for its memory safety because of those guardrails for LLM generated code.
+
+This code is daily driven by the author. All bugs are eliminated in a prompt manner by someone terminally online.
+
 ## Build and try it
 
 Install Go 1.26 or newer and the desktop dependencies described by
