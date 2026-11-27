@@ -5,6 +5,12 @@ One Go codebase with two interfaces: **MailSalon**, the gotui terminal client
 Both use the same Maildir, MIME, TOML, transport, OpenPGP and contacts/calendar
 packages. Each retains its own executable, configuration path and interface.
 
+## MailSalon Family
+
+This software is part of the MailSalon Family which also includes [MailSalonSync](https://github.com/SeraphinaDX/MailSalonSync) and [MailSalonTools](https://github.com/SeraphinaDX/MailSalonTools)
+
+## Build
+
 ```sh
 make build-tui   # MailSalon; pure Go, no graphics dependencies
 make build-gui   # MailSalonGUI; needs the desktop dependencies below
